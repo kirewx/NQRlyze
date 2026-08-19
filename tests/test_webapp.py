@@ -178,29 +178,59 @@ def test_fit_reports_bad_requests_rather_than_hanging():
         api_job({"job": "nope"})
 
 
-def test_multistart_escapes_a_local_minimum():
-    """The trap this exists for: a wrong Cq hiding behind inflated broadening."""
-    experiment = Experiment.from_nucleus("27Al", field=11.7449, transitions="ct")
-    truth = Site(cq=5.2, eta=0.42, iso=62.0, lorentz=0.0012, gauss=0.0020)
-    low, high = suggest_window([truth], experiment)
-    x = np.linspace(low, high, 2000)
-    y = simulate(x, truth, experiment, divisions=60)
-    y = y / y.max() + np.random.default_rng(0).normal(0, 0.015, x.size)
-    data = Spectrum(x, y, experiment.reference_frequency)
+FREE_SITE_PARAMETERS = [
+    FitParameter(0, "cq", 0.0, 13.2),
+    FitParameter(0, "eta", 0.0, 1.0),
+    FitParameter(0, "iso", -270.0, 330.0),
+    FitParameter(0, "lorentz", 0.0, 0.03),
+    FitParameter(0, "gauss", 0.0, 0.03),
+]
+TRUTH = Site(cq=5.2, eta=0.42, iso=62.0, lorentz=0.0012, gauss=0.0020)
 
+
+def _noisy_central_transition():
+    experiment = Experiment.from_nucleus("27Al", field=11.7449, transitions="ct")
+    low, high = suggest_window([TRUTH], experiment)
+    x = np.linspace(low, high, 2000)
+    y = simulate(x, TRUTH, experiment, divisions=60)
+    y = y / y.max() + np.random.default_rng(0).normal(0, 0.015, x.size)
+    return experiment, Spectrum(x, y, experiment.reference_frequency)
+
+
+@pytest.mark.parametrize(
+    "cq, eta, iso",
+    [(4.4, 0.7, 30.0), (1.5, 0.1, -100.0), (9.0, 0.9, 150.0)],
+)
+def test_multistart_recovers_the_truth_from_a_poor_start(cq, eta, iso):
+    """The contract: a handful of restarts finds the answer from a bad guess.
+
+    Deliberately asserts only what multi-start *achieves*, not that a single
+    refinement fails. Whether a lone local fit falls into the usual trap -- a
+    wrong Cq hiding behind inflated broadening -- turns out to depend on the
+    SciPy version, so requiring it to fail encoded one optimiser's behaviour as
+    if it were physics, and broke on SciPy 1.18.
+    """
+    experiment, data = _noisy_central_transition()
+    start = [Site(cq=cq, eta=eta, iso=iso, lorentz=0.003, gauss=0.003)]
+    result = fit(
+        data, start, experiment, FREE_SITE_PARAMETERS,
+        baseline_order=0, divisions=34, global_search=False, restarts=8,
+    )
+    assert result.sites[0].cq == pytest.approx(TRUTH.cq, abs=0.08)
+    assert result.sites[0].eta == pytest.approx(TRUTH.eta, abs=0.08)
+    assert result.r_squared > 0.99
+
+
+def test_multistart_is_never_worse_than_a_single_refinement():
+    """Restarts include the caller's own starting point, so they cannot lose."""
+    experiment, data = _noisy_central_transition()
     start = [Site(cq=4.4, eta=0.7, iso=30.0, lorentz=0.003, gauss=0.003)]
-    free = [
-        FitParameter(0, "cq", 0.0, 13.2), FitParameter(0, "eta", 0.0, 1.0),
-        FitParameter(0, "iso", -270.0, 330.0),
-        FitParameter(0, "lorentz", 0.0, 0.03), FitParameter(0, "gauss", 0.0, 0.03),
-    ]
-    plain = fit(data, start, experiment, free, baseline_order=0, divisions=34,
-                global_search=False)
-    many = fit(data, start, experiment, free, baseline_order=0, divisions=34,
-               global_search=False, restarts=8)
-    assert many.r_squared > plain.r_squared
-    assert many.sites[0].cq == pytest.approx(5.2, abs=0.06)
-    assert abs(plain.sites[0].cq - 5.2) > 0.1  # the trap is real
+    common = dict(
+        baseline_order=0, divisions=34, global_search=False,
+    )
+    plain = fit(data, start, experiment, FREE_SITE_PARAMETERS, **common)
+    many = fit(data, start, experiment, FREE_SITE_PARAMETERS, restarts=8, **common)
+    assert many.r_squared >= plain.r_squared - 1e-6
 
 
 def test_http_surface():

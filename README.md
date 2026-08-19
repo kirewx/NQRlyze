@@ -94,12 +94,17 @@ want:
 
 The trap `restarts` exists for is specific and common: a slightly wrong `Cq`
 survives by inflating the broadening to cover its mistake, and a single
-refinement settles there quite happily. In one measured case a plain local fit
-stopped at `Cq = 4.85 MHz` (R² 0.982) where the truth was 5.2; eight restarts
-reached 5.21 (R² 0.998) in a tenth of the time a global search needed. Worse, if
-the starting pattern does not overlap the data at all, the residual is flat, the
-Jacobian is numerically zero and a local fit does not move at all — restarts
-escape that too. `least_squares` then polishes the winner and yields the
+refinement can settle there quite happily. On a simulated ²⁷Al central
+transition started from `Cq = 4.4, eta = 0.7`, a lone local fit stopped at
+`Cq = 4.85 MHz` (R² 0.982) against a truth of 5.2, while eight restarts reached
+5.21 (R² 0.998) in a tenth of the time a global search needed.
+
+How readily a lone refinement falls in depends on the SciPy version — SciPy 1.18
+escapes that particular start where 1.17 does not — so treat it as a hazard that
+may or may not bite, not as a guarantee either way. What does not vary: if the
+starting pattern does not overlap the data at all, the residual is flat, the
+Jacobian is numerically zero, and a local fit does not move from where it began.
+Restarts escape both. `least_squares` then polishes the winner and yields the
 Jacobian for the error estimates.
 
 ## Stepped-frequency data

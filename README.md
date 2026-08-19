@@ -40,6 +40,12 @@ tick the parameters you want fitted, and press **Fit**. Nothing is uploaded
 anywhere: the server is the standard library, bound to loopback, and the page
 makes no external requests.
 
+The frequency window is entered QUEST-style, as a centre frequency (MHz) and a
+spectral width (kHz). Ticking **NQR** zeroes the field and switches to all
+transitions — but the field and Larmor inputs stay live, so typing a small
+field on top gives Zeeman-perturbed NQR, computed by the same exact
+diagonalisation as everything else.
+
 Press **Synthesise** to make a noisy spectrum from the parameters on screen and
 fit that, which is the quickest way to see the whole thing work without touching
 your own data. You can also drop a two-column text file onto the page, or point

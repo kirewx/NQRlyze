@@ -1,5 +1,9 @@
 # NQRlyze
 
+[![tests](https://github.com/kirewx/NQRlyze/actions/workflows/tests.yml/badge.svg)](https://github.com/kirewx/NQRlyze/actions/workflows/tests.yml)
+[![python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](pyproject.toml)
+[![licence](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
+
 Automatic fitting of exact quadrupolar NMR and NQR powder patterns — `Cq`, `eta` and
 Lorentzian/Gaussian broadening — from a measured spectrum.
 

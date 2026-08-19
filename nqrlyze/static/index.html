@@ -206,10 +206,10 @@ table.results tr:last-child td{border-bottom:0}
       <section class="group">
         <h2>Window</h2>
         <div class="card">
-          <div class="row"><label for="win-low">From</label>
-            <div class="ctl"><input type="number" id="win-low" class="wide" step="0.001"><span class="unit">MHz</span></div></div>
-          <div class="row"><label for="win-high">To</label>
-            <div class="ctl"><input type="number" id="win-high" class="wide" step="0.001"><span class="unit">MHz</span></div></div>
+          <div class="row"><label for="win-centre">Centre</label>
+            <div class="ctl"><input type="number" id="win-centre" class="wide" step="0.001"><span class="unit">MHz</span></div></div>
+          <div class="row"><label for="win-width">Width</label>
+            <div class="ctl"><input type="number" id="win-width" class="wide" step="1" min="0"><span class="unit">kHz</span></div></div>
           <div class="row"><label for="win-points">Points</label>
             <div class="ctl"><input type="number" id="win-points" step="100" min="64" max="20000"><span class="unit"></span>
               <button id="win-auto">Auto</button></div></div>
@@ -644,8 +644,9 @@ function renderFit(r){
 
 /* ---------- actions ------------------------------------------------------ */
 function syncWindowInputs(){
-  document.getElementById("win-low").value  = S.win.low  == null ? "" : (+S.win.low).toFixed(5);
-  document.getElementById("win-high").value = S.win.high == null ? "" : (+S.win.high).toFixed(5);
+  const has = S.win.low != null && S.win.high != null;
+  document.getElementById("win-centre").value = has ? ((S.win.low + S.win.high) / 2).toFixed(5) : "";
+  document.getElementById("win-width").value  = has ? ((S.win.high - S.win.low) * 1e3).toFixed(1) : "";
   document.getElementById("win-points").value = S.win.points;
 }
 function setData(r){
@@ -761,10 +762,17 @@ async function init(){
   document.getElementById("add-site").onclick = () => {
     S.sites.push(newSite(`Site ${S.sites.length+1}`)); invalidateFit(); renderSites(); simulate();
   };
-  ["win-low","win-high"].forEach(id => document.getElementById(id).oninput = e => {
+  const applyCentreWidth = () => {
+    const centre = +document.getElementById("win-centre").value;
+    const width  = +document.getElementById("win-width").value * 1e-3;   /* kHz -> MHz */
+    if(!isFinite(centre) || !isFinite(width) || width <= 0){
+      showError("spectral width must be a positive number of kHz"); return;
+    }
     S.win.auto = false;
-    S.win[id === "win-low" ? "low" : "high"] = +e.target.value; scheduleSim();
-  });
+    S.win.low = centre - width / 2; S.win.high = centre + width / 2;
+    scheduleSim();
+  };
+  ["win-centre","win-width"].forEach(id => document.getElementById(id).oninput = applyCentreWidth);
   document.getElementById("win-points").oninput = e => { S.win.points = +e.target.value||2400; scheduleSim(); };
   document.getElementById("win-auto").onclick = () => { invalidateFit(); S.win.auto = true; simulate(); };
 

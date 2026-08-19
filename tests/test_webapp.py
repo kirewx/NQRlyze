@@ -260,3 +260,10 @@ def test_http_surface():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_page_has_quest_style_window_controls():
+    """The window is entered as centre frequency + spectral width, not From/To."""
+    html = (STATIC / "index.html").read_text()
+    assert 'id="win-centre"' in html and 'id="win-width"' in html
+    assert 'id="win-low"' not in html and 'id="win-high"' not in html

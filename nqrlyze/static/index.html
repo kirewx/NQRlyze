@@ -118,6 +118,7 @@ button.ghost:hover{color:var(--danger); background:transparent}
 .legend .key{width:14px; height:2.5px; border-radius:2px; flex:none}
 .segmented{display:flex; border:1px solid var(--line-strong); border-radius:7px; overflow:hidden}
 .segmented button{border:0; border-radius:0; padding:4px 10px; font-size:12px; background:var(--surface)}
+.segmented button:disabled{opacity:.45; cursor:default}
 .segmented button[aria-pressed="true"]{background:var(--accent-soft); color:var(--accent); font-weight:600}
 .segmented button + button{border-left:1px solid var(--line)}
 #plot{flex:1; min-height:0; width:100%; display:block; touch-action:none}
@@ -767,7 +768,7 @@ async function init(){
       S.prevField = S.field;
       S.field = 0; S.larmor = 0;
       document.getElementById("field").value = 0;
-      document.getElementById("larmor").value = 0;
+      document.getElementById("larmor").value = (0).toFixed(4);
       S.transitions = "all";
       document.getElementById("transitions").value = "all";
       ppm.disabled = true;
@@ -791,6 +792,7 @@ async function init(){
     const centre = +document.getElementById("win-centre").value;
     const width  = +document.getElementById("win-width").value * 1e-3;   /* kHz -> MHz */
     if(!isFinite(centre) || !isFinite(width) || width <= 0){
+      clearTimeout(timer);
       showError("spectral width must be a positive number of kHz"); return;
     }
     S.win.auto = false;
@@ -798,6 +800,7 @@ async function init(){
     scheduleSim();
   };
   ["win-centre","win-width"].forEach(id => document.getElementById(id).oninput = applyCentreWidth);
+  ["win-centre","win-width"].forEach(id => document.getElementById(id).onblur = syncWindowInputs);
   document.getElementById("win-points").oninput = e => { S.win.points = +e.target.value||2400; scheduleSim(); };
   document.getElementById("win-auto").onclick = () => { invalidateFit(); S.win.auto = true; simulate(); };
 

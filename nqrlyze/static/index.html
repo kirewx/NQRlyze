@@ -1,0 +1,812 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NQRlyze</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230072B2'/%3E%3Cpath d='M5 23c3 0 3-11 5.5-11S13 23 16 23s3-11 5.5-11S24 23 27 23' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/* ---- tokens ------------------------------------------------------------- */
+:root{
+  --bg:#f7f7f6; --surface:#ffffff; --surface-2:#f2f2f0; --line:#e2e2de;
+  --line-strong:#cfcfc9; --ink:#1c1c1a; --ink-2:#55554f; --ink-3:#8a8a82;
+  --accent:#0072B2; --accent-soft:#e6f0f7; --danger:#b3261e; --good:#0f7b52;
+  --data:#33332f; --grid:#ececE7;
+  --s1:#0072B2; --s2:#D55E00; --s3:#009E73; --s4:#E69F00; --s5:#CC79A7; --s6:#56B4E9;
+  --radius:10px; --shadow:0 1px 2px rgba(0,0,0,.05),0 4px 14px rgba(0,0,0,.05);
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+:root[data-theme="dark"]{
+  --bg:#141413; --surface:#1c1c1a; --surface-2:#232321; --line:#33332f;
+  --line-strong:#45453f; --ink:#ececE7; --ink-2:#b4b4ac; --ink-3:#84847c;
+  --accent:#3D94D1; --accent-soft:#1b2c38; --danger:#e0655c; --good:#3fae83;
+  --data:#d7d7d1; --grid:#2a2a27;
+  --s1:#3D94D1; --s2:#D55E00; --s3:#009E73; --s4:#C08400; --s5:#B8618F; --s6:#2E97C9;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.3);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+/* ---- shell -------------------------------------------------------------- */
+.app{display:flex; flex-direction:column; height:100vh}
+header{
+  display:flex; align-items:center; gap:14px; padding:10px 18px;
+  border-bottom:1px solid var(--line); background:var(--surface);
+}
+.brand{display:flex; align-items:baseline; gap:10px}
+.brand h1{margin:0; font-size:16px; font-weight:650; letter-spacing:-.01em}
+.brand .sub{color:var(--ink-3); font-size:12px}
+header .spacer{flex:1}
+main{display:flex; flex:1; min-height:0}
+aside{
+  /* Wide enough that the "fit" label still clears the scrollbar the overflow
+     introduces -- it is a control, not decoration, and must not be clipped. */
+  width:420px; flex:none; border-right:1px solid var(--line);
+  background:var(--surface); overflow-y:auto; padding:14px 16px 40px 14px;
+  scrollbar-gutter:stable;
+}
+.panel{flex:1; min-width:0; display:flex; flex-direction:column; padding:14px 18px 18px; gap:12px}
+@media (max-width:900px){
+  main{flex-direction:column} aside{width:auto; border-right:0; border-bottom:1px solid var(--line); max-height:46vh}
+}
+/* ---- controls ----------------------------------------------------------- */
+section.group{margin-bottom:16px}
+.group > h2{
+  margin:0 0 8px; font-size:11px; font-weight:650; letter-spacing:.09em;
+  text-transform:uppercase; color:var(--ink-3);
+}
+.card{
+  background:var(--surface-2); border:1px solid var(--line);
+  border-radius:var(--radius); padding:10px 11px; margin-bottom:9px;
+}
+.row{display:grid; grid-template-columns:98px minmax(0,1fr); gap:9px; align-items:center; margin-bottom:7px}
+.row:last-child{margin-bottom:0}
+.row > label{font-size:12.5px; color:var(--ink-2)}
+.ctl{display:flex; align-items:center; gap:7px; min-width:0}
+input[type=number],input[type=text],select,textarea{
+  background:var(--surface); color:var(--ink); border:1px solid var(--line-strong);
+  border-radius:7px; padding:5px 7px; font:inherit; font-size:12.5px; width:100%;
+  font-variant-numeric:tabular-nums;
+}
+input[type=number]{font-family:var(--mono); width:88px; flex:none}
+input[type=number].wide{width:120px}
+textarea{font-family:var(--mono); font-size:12px; resize:vertical; min-height:48px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent); outline-offset:-1px; border-color:transparent}
+input[type=range]{flex:1 1 48px; min-width:44px; accent-color:var(--accent); height:18px}
+.unit{color:var(--ink-3); font-size:11.5px; width:30px; flex:none}
+.fitbox{display:flex; align-items:center; gap:3px; flex:none; cursor:pointer; user-select:none}
+.fitbox input{accent-color:var(--accent); margin:0; cursor:pointer}
+.fitbox span{font-size:10.5px; color:var(--ink-3); letter-spacing:.03em}
+button{
+  background:var(--surface); color:var(--ink); border:1px solid var(--line-strong);
+  border-radius:7px; padding:6px 11px; font:inherit; font-size:12.5px; cursor:pointer;
+}
+button:hover{background:var(--surface-2); border-color:var(--ink-3)}
+button:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+button.primary{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:550}
+button.primary:hover{filter:brightness(1.08)}
+button.primary:disabled{opacity:.5; cursor:progress}
+button.ghost{border-color:transparent; color:var(--ink-3); padding:4px 6px}
+button.ghost:hover{color:var(--danger); background:transparent}
+.btnrow{display:flex; gap:7px; flex-wrap:wrap}
+.site-head{display:flex; align-items:center; gap:8px; margin:-2px 0 9px}
+.swatch{width:9px; height:9px; border-radius:50%; flex:none}
+.site-head input[type=text]{width:auto; flex:1; font-weight:550; padding:3px 6px}
+.disclose{
+  background:none; border:0; color:var(--ink-3); font-size:11.5px; padding:3px 0;
+  cursor:pointer; display:flex; align-items:center; gap:5px;
+}
+.disclose:hover{color:var(--accent); background:none}
+.disclose .chev{transition:transform .15s}
+.disclose[aria-expanded="true"] .chev{transform:rotate(90deg)}
+.hint{color:var(--ink-3); font-size:11.5px; margin:6px 0 0; line-height:1.45}
+/* ---- plot --------------------------------------------------------------- */
+.plotwrap{
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+  box-shadow:var(--shadow); flex:1; min-height:0; display:flex; flex-direction:column;
+}
+.plothead{
+  display:flex; align-items:center; gap:10px; padding:9px 12px;
+  border-bottom:1px solid var(--line); flex-wrap:wrap;
+}
+.legend{display:flex; gap:13px; flex-wrap:wrap; align-items:center; font-size:12px; color:var(--ink-2)}
+.legend .item{display:flex; align-items:center; gap:6px}
+.legend .key{width:14px; height:2.5px; border-radius:2px; flex:none}
+.segmented{display:flex; border:1px solid var(--line-strong); border-radius:7px; overflow:hidden}
+.segmented button{border:0; border-radius:0; padding:4px 10px; font-size:12px; background:var(--surface)}
+.segmented button[aria-pressed="true"]{background:var(--accent-soft); color:var(--accent); font-weight:600}
+.segmented button + button{border-left:1px solid var(--line)}
+#plot{flex:1; min-height:0; width:100%; display:block; touch-action:none}
+.axis text{fill:var(--ink-3); font-size:10.5px; font-family:var(--mono)}
+.axis line{stroke:var(--line-strong)}
+.gridline{stroke:var(--grid)}
+.axis-title{fill:var(--ink-2); font-size:11.5px}
+.readout{
+  position:absolute; pointer-events:none; background:var(--surface);
+  border:1px solid var(--line-strong); border-radius:7px; padding:6px 8px;
+  font-size:11.5px; font-family:var(--mono); box-shadow:var(--shadow);
+  white-space:nowrap; opacity:0; transition:opacity .1s; z-index:5;
+}
+.plotbody{position:relative; flex:1; min-height:0}
+/* ---- status ------------------------------------------------------------- */
+.status{
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+  padding:10px 12px; max-height:31vh; overflow:auto; flex:none;
+}
+.status h3{margin:0 0 7px; font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); font-weight:650}
+.metrics{display:flex; gap:18px; flex-wrap:wrap; margin-bottom:9px}
+.metric .v{font-family:var(--mono); font-size:15px; font-weight:600}
+.metric .k{font-size:11px; color:var(--ink-3)}
+table.results{border-collapse:collapse; width:100%; font-size:12.5px}
+table.results th{
+  text-align:left; font-weight:600; color:var(--ink-3); font-size:11px;
+  letter-spacing:.05em; text-transform:uppercase; padding:3px 9px 3px 0; border-bottom:1px solid var(--line);
+}
+table.results td{padding:3px 9px 3px 0; border-bottom:1px solid var(--line); font-family:var(--mono); font-variant-numeric:tabular-nums}
+table.results td.name{font-family:inherit; color:var(--ink-2)}
+table.results tr:last-child td{border-bottom:0}
+.err{color:var(--danger); font-size:12.5px; white-space:pre-wrap; font-family:var(--mono)}
+.muted{color:var(--ink-3); font-size:12.5px}
+.spin{
+  width:12px; height:12px; border:2px solid var(--line-strong); border-top-color:var(--accent);
+  border-radius:50%; display:inline-block; animation:spin .7s linear infinite; vertical-align:-2px;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.drop{position:fixed; inset:0; background:var(--accent-soft); border:3px dashed var(--accent);
+  display:none; align-items:center; justify-content:center; font-size:17px; color:var(--accent); z-index:50}
+.drop.on{display:flex}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <h1>NQRlyze</h1>
+      <span class="sub">exact quadrupolar powder patterns &mdash; simulate &amp; fit</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="segmented" role="group" aria-label="Colour theme">
+      <button id="theme-light" aria-pressed="false">Light</button>
+      <button id="theme-dark" aria-pressed="false">Dark</button>
+    </div>
+  </header>
+
+  <main>
+    <aside>
+      <section class="group">
+        <h2>Experiment</h2>
+        <div class="card">
+          <div class="row"><label for="nucleus">Nucleus</label>
+            <div class="ctl"><select id="nucleus"></select></div></div>
+          <div class="row"><label for="spin">Spin <i>I</i></label>
+            <div class="ctl"><input type="number" id="spin" step="0.5" min="1"><span class="unit"></span></div></div>
+          <div class="row"><label for="field">Field</label>
+            <div class="ctl"><input type="number" id="field" step="0.01" min="0"><span class="unit">T</span></div></div>
+          <div class="row"><label for="larmor">Larmor</label>
+            <div class="ctl"><input type="number" id="larmor" step="0.001" min="0"><span class="unit">MHz</span>
+              <label class="fitbox"><input type="checkbox" id="nqr"><span>NQR</span></label></div></div>
+          <div class="row"><label for="transitions">Transitions</label>
+            <div class="ctl"><select id="transitions">
+              <option value="all">all</option><option value="ct">central only</option>
+              <option value="satellites">satellites</option><option value="single">Δm = 1</option>
+            </select></div></div>
+        </div>
+      </section>
+
+      <section class="group">
+        <h2>Sites</h2>
+        <div id="sites"></div>
+        <div class="btnrow"><button id="add-site">+ Add site</button></div>
+      </section>
+
+      <section class="group">
+        <h2>Window</h2>
+        <div class="card">
+          <div class="row"><label for="win-low">From</label>
+            <div class="ctl"><input type="number" id="win-low" class="wide" step="0.001"><span class="unit">MHz</span></div></div>
+          <div class="row"><label for="win-high">To</label>
+            <div class="ctl"><input type="number" id="win-high" class="wide" step="0.001"><span class="unit">MHz</span></div></div>
+          <div class="row"><label for="win-points">Points</label>
+            <div class="ctl"><input type="number" id="win-points" step="100" min="64" max="20000"><span class="unit"></span>
+              <button id="win-auto">Auto</button></div></div>
+        </div>
+      </section>
+
+      <section class="group">
+        <h2>Data</h2>
+        <div class="card">
+          <div class="row" style="align-items:start">
+            <label for="paths">Path</label>
+            <textarea id="paths" placeholder="/path/to/expt/10&#10;one per line to co-add"></textarea>
+          </div>
+          <div class="row"><label for="fmt">Format</label>
+            <div class="ctl"><select id="fmt"><option value="bruker">Bruker</option><option value="ascii">two-column text</option></select></div></div>
+          <div class="row"><label for="coadd-mode">Co-add</label>
+            <div class="ctl"><select id="coadd-mode">
+              <option value="mean">mean (coverage-corrected)</option>
+              <option value="sum">sum</option><option value="skyline">skyline</option></select></div></div>
+          <div class="btnrow" style="margin-top:9px">
+            <button id="load">Load</button>
+            <button id="synth">Synthesise</button>
+            <button id="clear-data" class="ghost">Clear</button>
+          </div>
+          <p class="hint"><b>Synthesise</b> makes a noisy spectrum from the parameters above,
+            so you can try a fit straight away. You can also drop a two-column text file anywhere on this page.</p>
+        </div>
+      </section>
+
+      <section class="group">
+        <h2>Fit</h2>
+        <div class="card">
+          <div class="row"><label for="baseline">Baseline</label>
+            <div class="ctl"><select id="baseline">
+              <option value="-1">none</option><option value="0" selected>constant</option>
+              <option value="1">linear</option><option value="2">quadratic</option></select></div></div>
+          <div class="row"><label for="quality">Quality</label>
+            <div class="ctl"><input type="number" id="quality" min="8" max="120" step="2" value="40"><span class="unit"></span></div></div>
+          <div class="row"><label for="strategy">Search</label>
+            <div class="ctl"><select id="strategy">
+              <option value="multistart">multi-start (recommended)</option>
+              <option value="local">local only (fastest)</option>
+              <option value="global">global (slowest, no guess needed)</option>
+            </select></div></div>
+          <div class="btnrow" style="margin-top:9px">
+            <button id="run-fit" class="primary">Fit</button>
+            <button id="reset-fit" class="ghost">Clear fit</button>
+          </div>
+          <p class="hint">Tick <b>fit</b> next to a parameter to let it vary. Amplitudes and the
+            baseline are solved exactly every iteration &mdash; they never need a guess.
+            <b>Multi-start</b> tries several starting points, which escapes the usual trap where a
+            slightly wrong C<sub>Q</sub> survives by inflating the broadening.</p>
+        </div>
+      </section>
+    </aside>
+
+    <div class="panel">
+      <div class="plotwrap">
+        <div class="plothead">
+          <div class="legend" id="legend"></div>
+          <div class="spacer" style="flex:1"></div>
+          <div class="segmented" role="group" aria-label="Frequency unit">
+            <button data-unit="ppm">ppm</button><button data-unit="kHz">kHz</button><button data-unit="MHz">MHz</button>
+          </div>
+          <button id="flip" title="Reverse the frequency axis">&#8646;</button>
+        </div>
+        <div class="plotbody">
+          <svg id="plot" role="img" aria-label="Simulated and measured powder spectrum"></svg>
+          <div class="readout" id="readout"></div>
+        </div>
+      </div>
+      <div class="status" id="status">
+        <h3>Status</h3>
+        <p class="muted" id="status-body">Adjust the parameters and the simulation follows.
+          Press <b>Synthesise</b> to make test data, then <b>Fit</b>.</p>
+      </div>
+    </div>
+  </main>
+</div>
+<div class="drop" id="drop">Drop a two-column spectrum to load it</div>
+
+<script>
+"use strict";
+const STRATEGY = {multistart:" from several starting points", local:"", global:" with a global search"};
+const SERIES = ["--s2","--s3","--s4","--s5","--s6","--s1"];
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+const PARAMS = [
+  {key:"cq",      label:"C<sub>Q</sub>",   unit:"MHz", min:0,     max:20,   step:1e-4, dp:4},
+  {key:"eta",     label:"&eta;",            unit:"",    min:0,     max:1,    step:1e-3, dp:3},
+  {key:"iso",     label:"&delta;<sub>iso</sub>", unit:"ppm", min:-1000, max:1000, step:0.1, dp:2},
+  {key:"lorentz", label:"Lorentzian",       unit:"kHz", min:0,     max:50,   step:1e-3, dp:3},
+  {key:"gauss",   label:"Gaussian",         unit:"kHz", min:0,     max:50,   step:1e-3, dp:3},
+];
+const CSA = [
+  {key:"span",  label:"&Omega;", unit:"ppm", min:0,  max:1000, step:0.1,  dp:2},
+  {key:"skew",  label:"&kappa;", unit:"",    min:-1, max:1,    step:1e-3, dp:3},
+  {key:"alpha", label:"&alpha;", unit:"&deg;", min:0, max:360, step:0.5,  dp:1},
+  {key:"beta",  label:"&beta;",  unit:"&deg;", min:0, max:180, step:0.5,  dp:1},
+  {key:"gamma", label:"&gamma;", unit:"&deg;", min:0, max:360, step:0.5,  dp:1},
+];
+const ALL = PARAMS.concat(CSA);
+
+const newSite = (label) => ({label, cq:1.0, eta:0.0, iso:0.0, span:0, skew:0,
+  alpha:0, beta:0, gamma:0, lorentz:1.0, gauss:0.0, weight:1, csa:false});
+
+const S = {
+  nuclei:[], nucleus:"27Al", spin:2.5, field:11.7449, larmor:130.4048,
+  transitions:"ct", nqr:false,
+  sites:[newSite("Site 1")], free:new Set(["0.cq","0.eta"]),
+  win:{low:null, high:null, points:2400, auto:true},
+  unit:"ppm", reversed:true, sim:null, data:null, fit:null, job:null, busy:false,
+};
+
+/* ---------- server ------------------------------------------------------- */
+async function post(path, body){
+  const r = await fetch(path, {method:"POST", headers:{"Content-Type":"application/json"},
+                              body:JSON.stringify(body||{})});
+  const j = await r.json();
+  if(!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+  return j;
+}
+const experimentPayload = () => ({
+  spin:S.spin, larmor:S.nqr?0:S.larmor, transitions:S.transitions,
+});
+const sitePayload = s => ({
+  label:s.label, cq:+s.cq, eta:+s.eta, iso:+s.iso, span:+s.span, skew:+s.skew,
+  alpha:+s.alpha, beta:+s.beta, gamma:+s.gamma,
+  lorentz:+s.lorentz*1e-3, gauss:+s.gauss*1e-3, weight:+s.weight,
+});
+const modelPayload = () => ({experiment:experimentPayload(), sites:S.sites.map(sitePayload)});
+
+/* ---------- simulate ----------------------------------------------------- */
+let timer = null, pending = 0;
+function scheduleSim(){ clearTimeout(timer); timer = setTimeout(simulate, 130); }
+
+/* A drawn fit belongs to the parameters that produced it.  As soon as any of
+   them is touched the overlay would be a lie, so drop it and fall back to the
+   live simulation; the results table stays until the next fit replaces it. */
+function invalidateFit(){ if(S.fit){ S.fit = null; draw(); } }
+
+async function simulate(){
+  const token = ++pending;
+  try{
+    const body = Object.assign(modelPayload(), {
+      window:{low:S.win.auto?null:S.win.low, high:S.win.auto?null:S.win.high, points:S.win.points},
+      divisions:22,
+    });
+    const r = await post("/api/simulate", body);
+    if(token !== pending) return;
+    S.sim = r; S.reference = r.reference;
+    if(S.win.auto){ S.win.low = r.low; S.win.high = r.high; syncWindowInputs(); }
+    clearError(); draw();
+  }catch(e){ if(token === pending) showError(e.message); }
+}
+
+/* ---------- controls ----------------------------------------------------- */
+const el = (tag, cls, html) => { const n=document.createElement(tag);
+  if(cls) n.className=cls; if(html!=null) n.innerHTML=html; return n; };
+
+function paramRow(site, index, def){
+  const row = el("div","row");
+  const label = el("label", null, def.label + (def.unit?` <span class="unit" style="width:auto">${def.unit}</span>`:""));
+  const ctl = el("div","ctl");
+  const num = el("input"); num.type="number"; num.step=def.step; num.value=(+site[def.key]).toFixed(def.dp);
+  const range = el("input"); range.type="range"; range.step=def.step;
+  range.min=def.min; range.max=Math.max(def.max, Math.abs(site[def.key])*1.5 || def.max);
+  range.value = site[def.key];
+  range.setAttribute("aria-label", def.label.replace(/<[^>]+>/g,"") + " slider");
+
+  const box = el("label","fitbox"); const chk = el("input"); chk.type="checkbox";
+  chk.checked = S.free.has(`${index}.${def.key}`);
+  chk.setAttribute("aria-label","fit " + def.key);
+  box.append(chk, el("span",null,"fit"));
+
+  const apply = (v, from) => {
+    v = +v; if(!isFinite(v)) return;
+    site[def.key] = v;
+    if(from !== "num") num.value = v.toFixed(def.dp);
+    if(from !== "range"){
+      if(v > +range.max) range.max = v*1.5;
+      if(v < +range.min) range.min = Math.min(def.min, v);
+      range.value = v;
+    }
+    invalidateFit(); scheduleSim();
+  };
+  num.addEventListener("input", () => apply(num.value,"num"));
+  range.addEventListener("input", () => apply(range.value,"range"));
+  chk.addEventListener("change", () => {
+    const id = `${index}.${def.key}`;
+    chk.checked ? S.free.add(id) : S.free.delete(id);
+  });
+  ctl.append(num, range, box);
+  row.append(label, ctl);
+  return row;
+}
+
+function renderSites(){
+  const host = document.getElementById("sites");
+  host.textContent = "";
+  S.sites.forEach((site, i) => {
+    const card = el("div","card");
+    const head = el("div","site-head");
+    const dot = el("span","swatch"); dot.style.background = css(SERIES[i % SERIES.length]);
+    const name = el("input"); name.type="text"; name.value=site.label;
+    name.addEventListener("input", () => { site.label = name.value; draw(); });
+    head.append(dot, name);
+    if(S.sites.length > 1){
+      const rm = el("button","ghost","&times;"); rm.title="Remove this site";
+      rm.setAttribute("aria-label","Remove " + site.label);
+      rm.addEventListener("click", () => {
+        S.sites.splice(i,1);
+        const kept = new Set();
+        S.free.forEach(id => { const [k,n]=id.split("."); const j=+k;
+          if(j<i) kept.add(id); else if(j>i) kept.add(`${j-1}.${n}`); });
+        S.free = kept; invalidateFit(); renderSites(); simulate();
+      });
+      head.append(rm);
+    }
+    card.append(head);
+    PARAMS.forEach(def => card.append(paramRow(site, i, def)));
+
+    const toggle = el("button","disclose",
+      `<span class="chev">&#9656;</span> chemical shift anisotropy`);
+    toggle.setAttribute("aria-expanded", String(site.csa));
+    const body = el("div"); body.style.display = site.csa ? "block" : "none";
+    CSA.forEach(def => body.append(paramRow(site, i, def)));
+    toggle.addEventListener("click", () => {
+      site.csa = !site.csa; body.style.display = site.csa ? "block" : "none";
+      toggle.setAttribute("aria-expanded", String(site.csa));
+    });
+    card.append(toggle, body);
+    host.append(card);
+  });
+}
+
+/* ---------- plot --------------------------------------------------------- */
+const SVG = "http://www.w3.org/2000/svg";
+const mk = (tag, attrs) => { const n=document.createElementNS(SVG,tag);
+  for(const k in attrs) n.setAttribute(k, attrs[k]); return n; };
+
+function toUnit(mhz){
+  const ref = S.reference || 0;
+  if(S.unit === "ppm" && ref) return (mhz - ref)/ref*1e6;
+  if(S.unit === "kHz") return (mhz - ref)*1e3;
+  return mhz;
+}
+function unitLabel(){
+  if(S.unit === "ppm" && (S.reference||0)) return "shift / ppm";
+  if(S.unit === "kHz") return (S.reference||0) ? "offset / kHz" : "frequency / kHz";
+  return "frequency / MHz";
+}
+function ticks(lo, hi, count){
+  const span = hi - lo; if(!(span > 0)) return [lo];
+  const raw = span/count, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw/mag, step = (norm<1.5?1:norm<3?2:norm<7?5:10)*mag;
+  const out=[]; for(let v=Math.ceil(lo/step)*step; v<=hi+step*1e-9; v+=step) out.push(v);
+  return out;
+}
+const fmtTick = v => {
+  const a = Math.abs(v);
+  if(a !== 0 && (a < 1e-3 || a >= 1e6)) return v.toExponential(1);
+  return String(+v.toPrecision(6));
+};
+
+function draw(){
+  const svg = document.getElementById("plot");
+  const box = svg.parentElement.getBoundingClientRect();
+  const W = Math.max(320, box.width), H = Math.max(220, box.height);
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("width", W); svg.setAttribute("height", H);
+  svg.textContent = "";
+  if(!S.sim && !S.data) return;
+
+  const hasRes = !!(S.fit && S.fit.residual);
+  const m = {l:58, r:14, t:12, b:34};
+  const resH = hasRes ? 82 : 0;
+  const gap = hasRes ? 12 : 0;
+  const plotH = H - m.t - m.b - resH - gap;
+  const plotW = W - m.l - m.r;
+  if(plotH < 40 || plotW < 40) return;
+
+  const traces = [];
+  if(S.data) traces.push({t:S.data, c:css("--data"), w:1.1, name:S.dataLabel||"experiment"});
+  if(S.fit && S.fit.model) traces.push({t:S.fit.model, c:css("--s1"), w:1.7, name:"fit"});
+  else if(S.sim) traces.push({t:S.sim.total, c:css("--s1"), w:1.7, name:"simulation"});
+  const comps = (S.fit && S.fit.components) || (S.sim && S.sim.components) || [];
+  if(comps.length > 1) comps.forEach((t,i) =>
+    traces.push({t, c:css(SERIES[i % SERIES.length]), w:1.1,
+                 name:(S.sites[i] && S.sites[i].label) || `site ${i+1}`}));
+
+  let xlo=Infinity, xhi=-Infinity, ylo=Infinity, yhi=-Infinity;
+  for(const tr of traces){
+    for(const v of tr.t.x){ const u=toUnit(v); if(u<xlo)xlo=u; if(u>xhi)xhi=u; }
+    for(const v of tr.t.y){ if(v<ylo)ylo=v; if(v>yhi)yhi=v; }
+  }
+  if(!(xhi>xlo)){ xhi = xlo+1; }
+  if(!(yhi>ylo)){ yhi = ylo+1; }
+  const pad = (yhi-ylo)*0.06; ylo -= pad; yhi += pad;
+
+  const flip = S.reversed;
+  const X = u => m.l + (flip ? (xhi-u)/(xhi-xlo) : (u-xlo)/(xhi-xlo))*plotW;
+  const Y = v => m.t + (1-(v-ylo)/(yhi-ylo))*plotH;
+
+  const g = mk("g",{});
+  svg.append(g);
+
+  ticks(xlo,xhi,7).forEach(v => {
+    const x = X(v); if(x < m.l-.5 || x > m.l+plotW+.5) return;
+    g.append(mk("line",{class:"gridline", x1:x, x2:x, y1:m.t, y2:m.t+plotH+(hasRes?gap+resH:0)}));
+    const tx = mk("text",{class:"", x:x, y:H-m.b+16, "text-anchor":"middle", fill:css("--ink-3"),
+                          "font-size":10.5, "font-family":"var(--mono)"});
+    tx.textContent = fmtTick(v); g.append(tx);
+  });
+  ticks(ylo,yhi,5).forEach(v => {
+    const y = Y(v); if(y < m.t-.5 || y > m.t+plotH+.5) return;
+    g.append(mk("line",{class:"gridline", x1:m.l, x2:m.l+plotW, y1:y, y2:y}));
+    const tx = mk("text",{x:m.l-8, y:y+3.5, "text-anchor":"end", fill:css("--ink-3"),
+                          "font-size":10.5, "font-family":"var(--mono)"});
+    tx.textContent = fmtTick(v); g.append(tx);
+  });
+  g.append(mk("line",{x1:m.l, x2:m.l+plotW, y1:m.t+plotH, y2:m.t+plotH, stroke:css("--line-strong")}));
+  g.append(mk("line",{x1:m.l, x2:m.l, y1:m.t, y2:m.t+plotH, stroke:css("--line-strong")}));
+  const at = mk("text",{x:m.l+plotW/2, y:H-4, "text-anchor":"middle", fill:css("--ink-2"), "font-size":11.5});
+  at.textContent = unitLabel(); g.append(at);
+  const yt = mk("text",{x:14, y:m.t+plotH/2, "text-anchor":"middle", fill:css("--ink-2"),
+                        "font-size":11.5, transform:`rotate(-90 14 ${m.t+plotH/2})`});
+  yt.textContent = "intensity"; g.append(yt);
+
+  const path = (trace, mapY) => {
+    let d = "", n = trace.x.length;
+    for(let i=0;i<n;i++){
+      const x = X(toUnit(trace.x[i])), y = mapY(trace.y[i]);
+      d += (i ? "L" : "M") + x.toFixed(2) + " " + y.toFixed(2);
+    }
+    return d;
+  };
+  for(const tr of traces)
+    g.append(mk("path",{d:path(tr.t, Y), fill:"none", stroke:tr.c,
+      "stroke-width":tr.w, "stroke-linejoin":"round"}));
+
+  if(hasRes){
+    const rTop = m.t + plotH + gap;
+    let rlo=Infinity, rhi=-Infinity;
+    for(const v of S.fit.residual.y){ if(v<rlo)rlo=v; if(v>rhi)rhi=v; }
+    const amp = Math.max(Math.abs(rlo), Math.abs(rhi)) || 1;
+    const RY = v => rTop + (1 - (v+amp)/(2*amp))*resH;
+    g.append(mk("line",{x1:m.l, x2:m.l+plotW, y1:RY(0), y2:RY(0), stroke:css("--line-strong")}));
+    g.append(mk("path",{d:path(S.fit.residual, RY), fill:"none", stroke:css("--ink-3"), "stroke-width":0.9}));
+    const rt = mk("text",{x:14, y:rTop+resH/2, "text-anchor":"middle", fill:css("--ink-2"),
+                          "font-size":11.5, transform:`rotate(-90 14 ${rTop+resH/2})`});
+    rt.textContent = "residual"; g.append(rt);
+  }
+
+  const cross = mk("line",{x1:0,x2:0,y1:m.t,y2:m.t+plotH, stroke:css("--ink-3"),
+                           "stroke-width":1, "stroke-dasharray":"3 3", opacity:0});
+  g.append(cross);
+  const readout = document.getElementById("readout");
+  svg.onmousemove = ev => {
+    const r = svg.getBoundingClientRect();
+    const px = ev.clientX - r.left;
+    if(px < m.l || px > m.l+plotW || !traces.length){ cross.setAttribute("opacity",0); readout.style.opacity=0; return; }
+    const frac = (px - m.l)/plotW;
+    const u = flip ? xhi - frac*(xhi-xlo) : xlo + frac*(xhi-xlo);
+    cross.setAttribute("x1",px); cross.setAttribute("x2",px); cross.setAttribute("opacity",.8);
+    const parts = [`${fmtTick(u)} ${S.unit==="ppm"&&(S.reference||0)?"ppm":S.unit}`];
+    for(const tr of traces.slice(0,3)){
+      const xs = tr.t.x; let best=0, bd=Infinity;
+      for(let i=0;i<xs.length;i++){ const d=Math.abs(toUnit(xs[i])-u); if(d<bd){bd=d;best=i;} }
+      parts.push(`${tr.name}: ${tr.t.y[best].toPrecision(4)}`);
+    }
+    readout.innerHTML = parts.join("<br>");
+    readout.style.opacity = 1;
+    const rw = readout.offsetWidth;
+    readout.style.left = Math.min(px + 14, plotW + m.l - rw) + "px";
+    readout.style.top = (m.t + 8) + "px";
+  };
+  svg.onmouseleave = () => { cross.setAttribute("opacity",0); readout.style.opacity=0; };
+
+  const legend = document.getElementById("legend");
+  legend.textContent = "";
+  for(const tr of traces){
+    const item = el("span","item");
+    const key = el("span","key"); key.style.background = tr.c;
+    item.append(key, el("span",null,tr.name)); legend.append(item);
+  }
+}
+
+/* ---------- status ------------------------------------------------------- */
+function statusHTML(html){ document.getElementById("status-body").innerHTML = html; }
+function showError(msg){ statusHTML(`<span class="err">${msg}</span>`); }
+function clearError(){
+  const b = document.getElementById("status-body");
+  if(b.querySelector(".err") && !S.fit) statusHTML(`<span class="muted">Ready.</span>`);
+}
+
+const LABELS = {cq:"C<sub>Q</sub>", eta:"&eta;", iso:"&delta;<sub>iso</sub>",
+  span:"&Omega;", skew:"&kappa;", alpha:"&alpha;", beta:"&beta;", gamma:"&gamma;",
+  lorentz:"Lorentzian", gauss:"Gaussian"};
+const UNITS = {cq:"MHz", eta:"", iso:"ppm", span:"ppm", skew:"", alpha:"&deg;",
+  beta:"&deg;", gamma:"&deg;", lorentz:"kHz", gauss:"kHz"};
+
+function renderFit(r){
+  const total = r.amplitudes.reduce((a,b)=>a+b, 0);
+  let html = `<div class="metrics">
+    <div class="metric"><div class="v">${r.r_squared.toFixed(5)}</div><div class="k">R²</div></div>
+    <div class="metric"><div class="v">${r.rmsd.toPrecision(3)}</div><div class="k">RMSD</div></div>
+    <div class="metric"><div class="v">${r.evaluations}</div><div class="k">evaluations</div></div>
+    <div class="metric"><div class="v" style="color:${r.success?"var(--good)":"var(--danger)"}">${r.success?"converged":"stopped"}</div><div class="k">${r.message.replace(/`/g,"")}</div></div>
+  </div>`;
+  html += `<table class="results"><thead><tr><th>site</th><th>parameter</th><th>value</th><th>uncertainty</th><th>share</th></tr></thead><tbody>`;
+  r.sites.forEach((site, i) => {
+    const share = total>0 ? (100*r.amplitudes[i]/total).toFixed(1)+" %" : "&mdash;";
+    let first = true;
+    ["cq","eta","iso","span","skew","alpha","beta","gamma","lorentz","gauss"].forEach(key => {
+      const scale = (key==="lorentz"||key==="gauss") ? 1e3 : 1;
+      const value = site[key]*scale;
+      if(value === 0 && !["cq","eta","iso","lorentz","gauss"].includes(key)) return;
+      const u = r.uncertainties[`${i}.${key}`];
+      const dp = key==="cq"?5 : key==="eta"||key==="skew"?4 : 2;
+      html += `<tr><td class="name">${first?(site.label||"site "+(i+1)):""}</td>
+        <td class="name">${LABELS[key]} <span class="muted">${UNITS[key]}</span></td>
+        <td>${value.toFixed(dp)}</td>
+        <td>${u==null?'<span class="muted">fixed</span>':"± "+(u*scale).toFixed(dp)}</td>
+        <td>${first?share:""}</td></tr>`;
+      first = false;
+    });
+  });
+  html += "</tbody></table>";
+  statusHTML(html);
+}
+
+/* ---------- actions ------------------------------------------------------ */
+function syncWindowInputs(){
+  document.getElementById("win-low").value  = S.win.low  == null ? "" : (+S.win.low).toFixed(5);
+  document.getElementById("win-high").value = S.win.high == null ? "" : (+S.win.high).toFixed(5);
+  document.getElementById("win-points").value = S.win.points;
+}
+function setData(r){
+  S.data = r.data; S.dataLabel = r.label; S.reference = r.reference || S.reference;
+  S.fit = null;
+  S.win.auto = false; S.win.low = r.low; S.win.high = r.high; syncWindowInputs();
+  statusHTML(`<span class="muted">Loaded <b>${r.label}</b> &mdash; ${r.points} points,
+    ${(+r.low).toFixed(5)} to ${(+r.high).toFixed(5)} MHz. Tick parameters and press Fit.</span>`);
+  simulate();
+}
+
+async function runFit(){
+  if(S.busy) return;
+  const free = [...S.free].map(id => { const [i,n] = id.split("."); return {site:+i, name:n}; });
+  if(!free.length){ showError("Tick at least one parameter to fit."); return; }
+  if(!S.data){ showError("Load or synthesise a spectrum first."); return; }
+  S.busy = true;
+  const btn = document.getElementById("run-fit");
+  btn.disabled = true; btn.textContent = "Fitting…";
+  statusHTML(`<span class="muted"><span class="spin"></span> fitting ${free.length}
+    parameter${free.length>1?"s":""}${STRATEGY[document.getElementById("strategy").value]}…</span>`);
+  try{
+    const body = Object.assign(modelPayload(), {
+      free,
+      baseline_order:+document.getElementById("baseline").value,
+      strategy:document.getElementById("strategy").value,
+      divisions:+document.getElementById("quality").value,
+    });
+    const {job} = await post("/api/fit", body);
+    for(;;){
+      await new Promise(r => setTimeout(r, 400));
+      const st = await post("/api/job", {job});
+      if(st.state === "running") continue;
+      if(st.state === "error"){ showError(st.error); break; }
+      S.fit = st.result;
+      st.result.sites.forEach((site, i) => {
+        Object.keys(site).forEach(k => {
+          if(k === "label") return;
+          S.sites[i][k] = (k==="lorentz"||k==="gauss") ? site[k]*1e3 : site[k];
+        });
+      });
+      renderSites(); renderFit(st.result); draw();
+      break;
+    }
+  }catch(e){ showError(e.message); }
+  finally{ S.busy = false; btn.disabled = false; btn.textContent = "Fit"; }
+}
+
+/* ---------- wiring ------------------------------------------------------- */
+function applyTheme(mode){
+  document.documentElement.setAttribute("data-theme", mode);
+  document.getElementById("theme-light").setAttribute("aria-pressed", String(mode==="light"));
+  document.getElementById("theme-dark").setAttribute("aria-pressed", String(mode==="dark"));
+  try{ localStorage.setItem("nqrlyze-theme", mode); }catch(e){}
+  draw();
+}
+function setUnit(u){
+  S.unit = u;
+  document.querySelectorAll("[data-unit]").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.unit === u)));
+  S.reversed = (u !== "MHz");
+  draw();
+}
+
+async function init(){
+  const stored = (()=>{ try{ return localStorage.getItem("nqrlyze-theme"); }catch(e){ return null; } })();
+  applyTheme(stored || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+  document.getElementById("theme-light").onclick = () => applyTheme("light");
+  document.getElementById("theme-dark").onclick  = () => applyTheme("dark");
+  document.querySelectorAll("[data-unit]").forEach(b => b.onclick = () => setUnit(b.dataset.unit));
+  document.getElementById("flip").onclick = () => { S.reversed = !S.reversed; draw(); };
+
+  const {nuclei} = await post("/api/nuclei", {});
+  S.nuclei = nuclei;
+  const sel = document.getElementById("nucleus");
+  nuclei.forEach(n => {
+    const o = el("option", null, `${n.symbol} — I = ${n.spin % 1 ? (n.spin*2)+"/2" : n.spin}`);
+    o.value = n.symbol; sel.append(o);
+  });
+  sel.value = S.nucleus;
+  const applyNucleus = () => {
+    const n = S.nuclei.find(x => x.symbol === sel.value); if(!n) return;
+    S.nucleus = n.symbol; S.spin = n.spin; S.gamma = Math.abs(n.gamma);
+    document.getElementById("spin").value = n.spin;
+    S.larmor = S.gamma * S.field;
+    document.getElementById("larmor").value = S.larmor.toFixed(4);
+    invalidateFit(); S.win.auto = true; simulate();
+  };
+  sel.onchange = applyNucleus;
+  applyNucleus();
+
+  document.getElementById("spin").oninput = e => { S.spin = +e.target.value || S.spin; invalidateFit(); S.win.auto = true; simulate(); };
+  document.getElementById("field").value = S.field;
+  document.getElementById("field").oninput = e => {
+    S.field = +e.target.value; S.larmor = (S.gamma||0)*S.field;
+    document.getElementById("larmor").value = S.larmor.toFixed(4); invalidateFit(); S.win.auto = true; simulate();
+  };
+  document.getElementById("larmor").oninput = e => {
+    S.larmor = +e.target.value;
+    if(S.gamma) document.getElementById("field").value = (S.larmor/S.gamma).toFixed(4);
+    invalidateFit(); S.win.auto = true; simulate();
+  };
+  document.getElementById("nqr").onchange = e => {
+    S.nqr = e.target.checked;
+    document.getElementById("larmor").disabled = S.nqr;
+    document.getElementById("field").disabled = S.nqr;
+    if(S.nqr) setUnit("MHz");
+    invalidateFit(); S.win.auto = true; simulate();
+  };
+  document.getElementById("transitions").value = S.transitions;
+  document.getElementById("transitions").onchange = e => { S.transitions = e.target.value; invalidateFit(); S.win.auto = true; simulate(); };
+
+  document.getElementById("add-site").onclick = () => {
+    S.sites.push(newSite(`Site ${S.sites.length+1}`)); invalidateFit(); renderSites(); simulate();
+  };
+  ["win-low","win-high"].forEach(id => document.getElementById(id).oninput = e => {
+    S.win.auto = false;
+    S.win[id === "win-low" ? "low" : "high"] = +e.target.value; scheduleSim();
+  });
+  document.getElementById("win-points").oninput = e => { S.win.points = +e.target.value||2400; scheduleSim(); };
+  document.getElementById("win-auto").onclick = () => { invalidateFit(); S.win.auto = true; simulate(); };
+
+  document.getElementById("load").onclick = async () => {
+    try{
+      setData(await post("/api/load", {
+        path:document.getElementById("paths").value,
+        format:document.getElementById("fmt").value,
+        coadd_mode:document.getElementById("coadd-mode").value,
+        reference:S.nqr?0:S.larmor, unit:"MHz",
+      }));
+    }catch(e){ showError(e.message); }
+  };
+  document.getElementById("synth").onclick = async () => {
+    try{ setData(await post("/api/demo", Object.assign(modelPayload(), {noise:0.015}))); }
+    catch(e){ showError(e.message); }
+  };
+  document.getElementById("clear-data").onclick = async () => {
+    await post("/api/clear", {}); S.data = null; S.fit = null;
+    statusHTML('<span class="muted">Data cleared.</span>'); invalidateFit(); S.win.auto = true; simulate();
+  };
+  document.getElementById("run-fit").onclick = runFit;
+  document.getElementById("reset-fit").onclick = () => {
+    S.fit = null; statusHTML('<span class="muted">Fit cleared.</span>'); draw();
+  };
+
+  const drop = document.getElementById("drop");
+  addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("on"); });
+  addEventListener("dragleave", e => { if(e.relatedTarget === null) drop.classList.remove("on"); });
+  addEventListener("drop", async e => {
+    e.preventDefault(); drop.classList.remove("on");
+    const file = e.dataTransfer.files[0]; if(!file) return;
+    try{
+      setData(await post("/api/load", {text:await file.text(), name:file.name,
+        unit:"MHz", reference:S.nqr?0:S.larmor}));
+    }catch(err){ showError(err.message); }
+  });
+
+  new ResizeObserver(() => draw()).observe(document.getElementById("plot").parentElement);
+  renderSites(); setUnit("ppm"); syncWindowInputs();
+}
+init();
+</script>
+</body>
+</html>

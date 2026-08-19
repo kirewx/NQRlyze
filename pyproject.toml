@@ -6,7 +6,18 @@ build-backend = "setuptools.build_meta"
 name = "nqrlyze"
 version = "0.1.0"
 description = "Autofitter for exact quadrupolar NMR/NQR powder lineshapes, cross-validated against QUEST"
+readme = "README.md"
 requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Erik Wimmer"}]
+keywords = ["NMR", "NQR", "quadrupolar", "solid-state", "lineshape", "fitting", "QUEST"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Physics",
+]
 dependencies = ["numpy>=1.24", "scipy>=1.10"]
 
 [project.optional-dependencies]

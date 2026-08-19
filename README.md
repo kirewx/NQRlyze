@@ -194,6 +194,14 @@ examples/demo.py   end-to-end run on synthetic data, no measurement needed
 docs/conventions.md
 ```
 
+## Licence
+
+MIT — see [`LICENSE`](LICENSE).
+
+If this contributes to published work, please also cite QUEST itself, whose
+physics the simulator follows: F. A. Perras, C. M. Widdifield and D. L. Bryce,
+*Solid State Nucl. Magn. Reson.* **2012**, 45–46, 36–44.
+
 ## Tests
 
 ```bash

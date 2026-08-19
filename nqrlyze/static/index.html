@@ -332,9 +332,11 @@ async function post(path, body){
   if(!r.ok) throw new Error(j.error || ("HTTP " + r.status));
   return j;
 }
-const experimentPayload = () => ({
-  spin:S.spin, larmor:S.nqr?0:S.larmor, transitions:S.transitions,
-});
+const experimentPayload = () => {
+  const exp = {spin:S.spin, larmor:S.larmor, transitions:S.transitions};
+  if(S.nqr) exp.reference = 0;          /* keep the axis absolute: ppm is meaningless near zero field */
+  return exp;
+};
 const sitePayload = s => ({
   label:s.label, cq:+s.cq, eta:+s.eta, iso:+s.iso, span:+s.span, skew:+s.skew,
   alpha:+s.alpha, beta:+s.beta, gamma:+s.gamma,
@@ -362,7 +364,12 @@ async function simulate(){
     if(token !== pending) return;
     S.sim = r; S.reference = r.reference;
     if(S.win.auto){ S.win.low = r.low; S.win.high = r.high; syncWindowInputs(); }
-    clearError(); draw();
+    if(r.total.y.some(v => v > 0)){ clearError(); }
+    else{
+      showError("no observable intensity in this window" + (S.larmor ? "" :
+        " - at zero field the central transition carries none; set transitions to \"all\""));
+    }
+    draw();
   }catch(e){ if(token === pending) showError(e.message); }
 }
 
@@ -704,6 +711,7 @@ function applyTheme(mode){
   draw();
 }
 function setUnit(u){
+  if(u === "ppm" && S.nqr) return;      /* ppm needs a non-zero reference */
   S.unit = u;
   document.querySelectorAll("[data-unit]").forEach(b =>
     b.setAttribute("aria-pressed", String(b.dataset.unit === u)));
@@ -751,9 +759,26 @@ async function init(){
   };
   document.getElementById("nqr").onchange = e => {
     S.nqr = e.target.checked;
-    document.getElementById("larmor").disabled = S.nqr;
-    document.getElementById("field").disabled = S.nqr;
-    if(S.nqr) setUnit("MHz");
+    const ppm = document.querySelector('[data-unit="ppm"]');
+    if(S.nqr){
+      /* Preset, not a lock: zero the field but leave both inputs live, so a
+         small field typed afterwards gives Zeeman-perturbed NQR.  Switch to
+         "all" because the central transition carries nothing at zero field. */
+      S.prevField = S.field;
+      S.field = 0; S.larmor = 0;
+      document.getElementById("field").value = 0;
+      document.getElementById("larmor").value = 0;
+      S.transitions = "all";
+      document.getElementById("transitions").value = "all";
+      ppm.disabled = true;
+      setUnit("MHz");
+    }else{
+      S.field = S.prevField != null ? S.prevField : 11.7449;
+      S.larmor = (S.gamma||0) * S.field;
+      document.getElementById("field").value = S.field;
+      document.getElementById("larmor").value = S.larmor.toFixed(4);
+      ppm.disabled = false;
+    }
     invalidateFit(); S.win.auto = true; simulate();
   };
   document.getElementById("transitions").value = S.transitions;

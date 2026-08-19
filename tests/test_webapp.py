@@ -267,3 +267,12 @@ def test_page_has_quest_style_window_controls():
     html = (STATIC / "index.html").read_text()
     assert 'id="win-centre"' in html and 'id="win-width"' in html
     assert 'id="win-low"' not in html and 'id="win-high"' not in html
+
+
+def test_page_keeps_field_editable_in_nqr_mode():
+    """The NQR box is a preset, not a lock: it must not disable the field and
+    Larmor inputs (that is what forbade Zeeman-perturbed NQR)."""
+    html = (STATIC / "index.html").read_text()
+    assert '"larmor").disabled' not in html
+    assert '"field").disabled' not in html
+    assert "no observable intensity" in html

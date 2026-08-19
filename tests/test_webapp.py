@@ -86,6 +86,31 @@ def test_simulate_honours_an_explicit_window():
         api_simulate(dict(MODEL, window={"low": 130.42, "high": 130.40}))
 
 
+def test_zeeman_perturbed_nqr_splits_the_line():
+    """A small Larmor term on top of the quadrupole interaction is a valid
+    experiment: the degenerate +-m levels split and the pattern widens."""
+    site = [{"cq": 72.0, "eta": 0.1, "lorentz": 0.001}]
+    pure = api_simulate({"experiment": {"spin": 1.5, "larmor": 0.0, "reference": 0,
+                                        "transitions": "all"}, "sites": site})
+    zeeman = api_simulate({"experiment": {"spin": 1.5, "larmor": 0.5, "reference": 0,
+                                          "transitions": "all"}, "sites": site})
+    assert max(pure["total"]["y"]) == pytest.approx(1.0, abs=1e-9)
+    assert max(zeeman["total"]["y"]) == pytest.approx(1.0, abs=1e-9)
+    assert zeeman["reference"] == 0.0
+    assert (zeeman["high"] - zeeman["low"]) > (pure["high"] - pure["low"])
+
+
+def test_pure_nqr_central_transition_has_no_intensity():
+    """At zero field the central transition carries nothing.  The GUI defaults
+    used to combine (NQR, transitions=ct) silently into this empty spectrum;
+    it now switches to "all" and explains a flat result."""
+    model = {"experiment": {"spin": 2.5, "larmor": 0.0, "transitions": "ct"},
+             "sites": [{"cq": 1.0, "eta": 0.0, "lorentz": 0.001}]}
+    assert max(api_simulate(model)["total"]["y"]) == 0.0
+    model["experiment"]["transitions"] = "all"
+    assert max(api_simulate(model)["total"]["y"]) == pytest.approx(1.0, abs=1e-9)
+
+
 def test_decimate_keeps_the_envelope():
     """Striding can step over a singularity; keeping block extremes cannot."""
     x = np.linspace(0.0, 1.0, 50_000)

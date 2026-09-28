@@ -47,10 +47,13 @@ def read_ascii(
         is treated as an offset origin when non-zero.
     column
         Which column holds the intensity (0-based); the first column is the axis.
+        With the default, a third column, when every row has one, is read as the
+        imaginary part.
     """
     path = Path(path)
     axis: list[float] = []
     values: list[float] = []
+    imaginary: list[float] = []
     for line in path.read_text(errors="replace").splitlines():
         text = line.strip()
         if not text or text.startswith(_COMMENT):
@@ -65,6 +68,11 @@ def read_ascii(
             continue  # header row
         axis.append(x)
         values.append(y)
+        if column == 1 and len(parts) > 2:
+            try:
+                imaginary.append(float(parts[2]))
+            except ValueError:
+                pass
 
     if not axis:
         raise ValueError(f"{path}: no numeric data found")
@@ -82,7 +90,8 @@ def read_ascii(
     else:
         raise ValueError(f"unknown unit {unit!r}")
 
-    return Spectrum(freq, np.asarray(values), reference, {"source": str(path)})
+    imag = np.asarray(imaginary) if len(imaginary) == len(values) else None
+    return Spectrum(freq, np.asarray(values), reference, {"source": str(path)}, imag)
 
 
 def write_ascii(

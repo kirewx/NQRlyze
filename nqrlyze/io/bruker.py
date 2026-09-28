@@ -153,7 +153,16 @@ def read_bruker(
             if key in acqus:
                 meta[key] = acqus[key]
 
-    return Spectrum(freq_mhz, intensity, reference=sf, meta=meta)
+    # Keep the other channel too when it is there, so the spectrum can be
+    # rephased without going back to TopSpin.
+    other = pdata / ("1r" if imaginary else "1i")
+    imag = None
+    if not imaginary and other.is_file():
+        imag = _read_binary(other, procs)[:size]
+        if imag.size < size:
+            imag = None
+
+    return Spectrum(freq_mhz, intensity, reference=sf, meta=meta, imag=imag)
 
 
 def read_bruker_series(
@@ -173,7 +182,8 @@ def read_bruker_series(
             if scans <= 0:
                 raise ValueError(f"{path}: NS missing, cannot scale by scans")
             spec = Spectrum(
-                spec.freq_mhz, spec.intensity / scans, spec.reference, spec.meta
+                spec.freq_mhz, spec.intensity / scans, spec.reference, spec.meta,
+                None if spec.imag is None else spec.imag / scans,
             )
         spectra.append(spec)
     return spectra

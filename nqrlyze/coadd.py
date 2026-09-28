@@ -85,23 +85,38 @@ def coadd(
     axis = common_axis(spectra, dx_mhz)
     stack = np.zeros((len(spectra), axis.size))
     coverage = np.zeros(axis.size)
+    # The imaginary parts combine the same way, so the joined spectrum can
+    # still be phased -- except for skyline, a maximum that has no partner.
+    complex_input = mode != "skyline" and all(s.imag is not None for s in spectra)
+    stack_imag = np.zeros_like(stack) if complex_input else None
 
     for k, (spec, weight) in enumerate(zip(spectra, weights)):
         piece = spec.normalized() if normalize_each else spec
         stack[k] = np.interp(
             axis, piece.freq_mhz, piece.intensity, left=0.0, right=0.0
         ) * weight
+        if complex_input:
+            stack_imag[k] = np.interp(
+                axis, piece.freq_mhz, piece.imag, left=0.0, right=0.0
+            ) * weight
         inside = (axis >= piece.freq_mhz[0]) & (axis <= piece.freq_mhz[-1])
         coverage += inside
 
+    imag = None
     if mode == "skyline":
         combined = stack.max(axis=0)
     else:
         combined = stack.sum(axis=0)
+        if complex_input:
+            imag = stack_imag.sum(axis=0)
         if mode == "mean":
             combined = np.divide(
                 combined, coverage, out=np.zeros_like(combined), where=coverage > 0
             )
+            if imag is not None:
+                imag = np.divide(
+                    imag, coverage, out=np.zeros_like(imag), where=coverage > 0
+                )
 
     references = {s.reference for s in spectra if s.reference}
     reference = references.pop() if len(references) == 1 else 0.0
@@ -111,4 +126,4 @@ def coadd(
         "coverage": coverage,
         "sources": [s.meta.get("source", "") for s in spectra],
     }
-    return Spectrum(axis, combined, reference, meta)
+    return Spectrum(axis, combined, reference, meta, imag)

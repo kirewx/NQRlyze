@@ -11,7 +11,9 @@ what you fit are the same simulation.
 
 The loaded spectrum lives here, on the server, rather than being shipped back
 and forth: the page receives a decimated copy to draw, while fits run against
-the full data.
+the full data.  The server keeps it as loaded and derives the fitted copy from
+it through phase and baseline correction, so moving a phase slider back
+always returns exactly to where it started.
 
 Security: the server binds to 127.0.0.1 and reads files the user names, which
 is appropriate for a local tool driven by the person sitting at the machine.
@@ -37,6 +39,7 @@ from .config import parse_experiment, parse_sites
 from .constants import NUCLEI
 from .fit import FitParameter, fit
 from .io import read_ascii, read_bruker_series
+from .processing import analytic_signal, auto_phase0, phase, process
 from .simulate import Experiment, Site, simulate_sites, suggest_window
 from .spectrum import Spectrum
 
@@ -45,12 +48,27 @@ STATIC = Path(__file__).parent / "static"
 #: Most points ever sent to the browser; fits always use the full data.
 DISPLAY_LIMIT = 4000
 
+#: No correction: what a freshly loaded spectrum starts with.
+PROCESSING_DEFAULTS: dict[str, Any] = {
+    "ph0": 0.0,
+    "ph1": 0.0,
+    "pivot": None,
+    "baseline_order": -1,
+    "baseline_edge": 0.1,
+}
+
 
 class _State:
     """Everything one session of the GUI holds on to."""
 
     def __init__(self):
+        self.raw: Spectrum | None = None
+        """The spectrum as loaded, before phase and baseline correction."""
         self.data: Spectrum | None = None
+        """What is drawn and fitted: ``raw`` processed and, usually, normalised."""
+        self.processing: dict[str, Any] = dict(PROCESSING_DEFAULTS)
+        self.normalize = True
+        self.label = ""
         self.jobs: dict[str, dict[str, Any]] = {}
         self.lock = threading.Lock()
 
@@ -180,7 +198,49 @@ def _spectrum_payload(spectrum: Spectrum, label: str) -> dict:
         "high": float(spectrum.freq_mhz[-1]),
         "points": len(spectrum),
         "label": label,
+        "has_imag": STATE.raw is not None and STATE.raw.imag is not None,
+        "processing": dict(STATE.processing),
     }
+
+
+def _parse_processing(body: dict) -> dict[str, Any]:
+    settings = dict(PROCESSING_DEFAULTS)
+    for key in ("ph0", "ph1", "baseline_edge"):
+        if body.get(key) is not None:
+            settings[key] = float(body[key])
+    if body.get("pivot") is not None:
+        settings["pivot"] = float(body["pivot"])
+    if body.get("baseline_order") is not None:
+        settings["baseline_order"] = int(body["baseline_order"])
+    if settings["baseline_order"] > 8:
+        raise ValueError("baseline order above 8 fits the noise, not the baseline")
+    return settings
+
+
+def _processed(raw: Spectrum, settings: dict[str, Any], normalize: bool) -> Spectrum:
+    corrected = process(
+        raw.freq_mhz,
+        raw.intensity,
+        raw.imag,
+        ph0=settings["ph0"],
+        ph1=settings["ph1"],
+        pivot_mhz=settings["pivot"],
+        baseline_order=settings["baseline_order"],
+        baseline_edge=settings["baseline_edge"],
+    )
+    spectrum = Spectrum(raw.freq_mhz, corrected, raw.reference, dict(raw.meta))
+    return spectrum.normalized() if normalize else spectrum
+
+
+def _store(raw: Spectrum, label: str, normalize: bool = True) -> dict:
+    """Make ``raw`` the current spectrum, uncorrected, and describe it."""
+    with STATE.lock:
+        STATE.raw = raw
+        STATE.label = label
+        STATE.normalize = normalize
+        STATE.processing = dict(PROCESSING_DEFAULTS)
+        STATE.data = _processed(raw, STATE.processing, normalize)
+        return _spectrum_payload(STATE.data, label)
 
 
 def api_load(body: dict) -> dict:
@@ -231,11 +291,7 @@ def api_load(body: dict) -> dict:
             else f"{len(paths)} spectra ({body.get('coadd_mode', 'mean')})"
         )
 
-    if normalize:
-        spectrum = spectrum.normalized()
-    with STATE.lock:
-        STATE.data = spectrum
-    return _spectrum_payload(spectrum, label)
+    return _store(spectrum, label, normalize)
 
 
 def api_demo(body: dict) -> dict:
@@ -249,16 +305,54 @@ def api_demo(body: dict) -> dict:
     noise = float(body.get("noise", 0.015))
     y = total / peak + rng.normal(0.0, noise, x.size)
     spectrum = Spectrum(x, y, experiment.reference_frequency)
-    with STATE.lock:
-        STATE.data = spectrum
-    payload = _spectrum_payload(spectrum, f"synthetic ({noise * 100:.1f} % noise)")
+    payload = _store(spectrum, f"synthetic ({noise * 100:.1f} % noise)", normalize=False)
     payload["truth"] = [asdict(site) for site in sites]
     return payload
 
 
+def api_process(body: dict) -> dict:
+    """Re-derive the fitted spectrum with new phase and baseline settings.
+
+    Always starts from the spectrum as loaded, never from the last result, so
+    corrections do not accumulate.
+    """
+    settings = _parse_processing(body)
+    with STATE.lock:
+        raw, normalize = STATE.raw, STATE.normalize
+    if raw is None:
+        raise ValueError("load or synthesise a spectrum first")
+    spectrum = _processed(raw, settings, normalize)
+    with STATE.lock:
+        if STATE.raw is not raw:  # a new load overtook this request
+            raise ValueError("the spectrum changed while it was being processed")
+        STATE.processing = settings
+        STATE.data = spectrum
+        return _spectrum_payload(spectrum, STATE.label)
+
+
+def api_autophase(body: dict) -> dict:
+    """Zero-order phase that makes the spectrum as absorptive as possible.
+
+    Keeps the first-order phase the page sends and solves only ``ph0`` on top of
+    it, then applies the result exactly as :func:`api_process` would.
+    """
+    with STATE.lock:
+        raw = STATE.raw
+    if raw is None:
+        raise ValueError("load or synthesise a spectrum first")
+    settings = _parse_processing(body)
+    rotated = phase(
+        raw.freq_mhz, analytic_signal(raw.intensity, raw.imag),
+        0.0, settings["ph1"], settings["pivot"],
+    )
+    return api_process(dict(settings, ph0=auto_phase0(rotated)))
+
+
 def api_clear(_body: dict) -> dict:
     with STATE.lock:
+        STATE.raw = None
         STATE.data = None
+        STATE.processing = dict(PROCESSING_DEFAULTS)
     return {"cleared": True}
 
 
@@ -370,6 +464,8 @@ ROUTES = {
     "/api/load": api_load,
     "/api/demo": api_demo,
     "/api/clear": api_clear,
+    "/api/process": api_process,
+    "/api/autophase": api_autophase,
     "/api/bracket": api_bracket,
     "/api/fit": api_fit,
     "/api/job": api_job,

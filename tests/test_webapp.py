@@ -276,3 +276,53 @@ def test_page_keeps_field_editable_in_nqr_mode():
     assert '"larmor").disabled' not in html
     assert '"field").disabled' not in html
     assert "no observable intensity" in html
+
+
+def test_process_phases_and_does_not_accumulate():
+    """Corrections are always applied to the spectrum as loaded: sending the
+    same settings twice gives the same answer, and zero gets the original."""
+    from nqrlyze.webapp import api_autophase, api_process
+
+    original = api_demo(dict(MODEL, noise=0.0))
+    assert original["has_imag"] is False
+    first = api_process({"ph0": 40.0, "ph1": -30.0, "baseline_order": 1})
+    again = api_process({"ph0": 40.0, "ph1": -30.0, "baseline_order": 1})
+    assert first["data"]["y"] == again["data"]["y"]
+    assert first["data"]["y"] != original["data"]["y"]
+    assert first["processing"]["ph0"] == 40.0
+    back = api_process({})
+    assert np.allclose(back["data"]["y"], original["data"]["y"])
+
+    # The fitted copy follows the processing.
+    assert STATE.data is not None and STATE.raw is not None
+    assert not np.shares_memory(STATE.data.intensity, STATE.raw.intensity)
+
+    # Auto phase undoes a zero-order error on top of the Hilbert-rebuilt part.
+    api_process({"ph0": 70.0})
+    fixed = api_autophase({})
+    assert abs(fixed["processing"]["ph0"]) < 5.0
+
+
+def test_process_needs_data_and_sane_settings():
+    from nqrlyze.webapp import api_process
+
+    with pytest.raises(ValueError):
+        api_process({"ph0": 10.0})
+    api_demo(MODEL)
+    with pytest.raises(ValueError):
+        api_process({"baseline_order": 12})
+
+
+def test_new_data_resets_processing():
+    from nqrlyze.webapp import api_process
+
+    api_demo(MODEL)
+    api_process({"ph0": 30.0})
+    assert api_demo(MODEL)["processing"]["ph0"] == 0.0
+
+
+def test_page_has_processing_and_export_controls():
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    for control in ('id="ph0"', 'id="ph1"', 'id="bl-order"', 'id="autophase"',
+                    'id="export-svg"', "/api/process", "/api/autophase"):
+        assert control in html

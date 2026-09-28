@@ -169,3 +169,61 @@ def test_transition_selection():
         transition_indices(1.0, "ct")
     with pytest.raises(ValueError):
         transition_indices(1.5, "nonsense")
+
+
+def test_zeeman_perturbed_nqr_central_transition_is_the_half_doublet():
+    """Weak field on a spin-3/2 NQR line: the central transition is the
+    splitting of the +-1/2 Kramers doublet, nu_L * sqrt(cos^2 + 4 sin^2) to
+    first order (effective g of 1 along the EFG axis, 2 across it).  Picking
+    the two middle levels in energy used to return one Zeeman branch of the
+    NQR line near 35 MHz instead."""
+    larmor, cq = 0.05, 70.0
+    grid = spiral_grid(2000)
+    freqs, amps = eigen_transitions(
+        grid.directions, 1.5, cq, 0.0, larmor, transitions="ct"
+    )
+    cos = grid.directions[:, 2]
+    expected = larmor * np.sqrt(cos**2 + 4.0 * (1.0 - cos**2))
+    assert np.max(np.abs(freqs[:, 0] - expected)) < 1e-3 * larmor
+    assert np.all(amps > 0)
+
+
+def test_central_transition_is_empty_at_zero_field_for_any_eta():
+    """The +-1/2 doublet is degenerate at zero field, whatever eta does to the
+    eigenvectors; the old index selection leaked intensity here once eta > 0."""
+    grid = spiral_grid(500)
+    for eta in (0.0, 0.1, 0.7):
+        _, amps = eigen_transitions(grid.directions, 1.5, 70.0, eta, 0.0, transitions="ct")
+        assert np.max(amps) == 0.0
+
+
+def test_central_transition_unchanged_at_high_field():
+    """In the Zeeman regime the selection by character must agree with the
+    middle pair of levels, which the second-order tests above pin down."""
+    grid = spiral_grid(3000)
+    for spin, cq, eta, larmor in [(1.5, 3.0, 0.3, 100.0), (2.5, 8.0, 0.6, 130.0),
+                                  (3.5, 12.0, 0.9, 90.0), (1.5, 5.0, 0.2, -60.0)]:
+        dim = round(2 * spin) + 1
+        by_character = eigen_transitions(
+            grid.directions, spin, cq, eta, larmor, transitions="ct")
+        by_index = eigen_transitions(
+            grid.directions, spin, cq, eta, larmor,
+            transitions=[(dim // 2 - 1, dim // 2)])
+        assert np.allclose(by_character[0], by_index[0])
+        assert np.allclose(by_character[1], by_index[1])
+
+
+def test_satellites_near_zero_field_keep_the_nqr_line():
+    """With the quadrupole coupling dominant, satellites plus central
+    transition must add up to all transitions, orientation by orientation, and
+    the satellites must carry the NQR line."""
+    grid = spiral_grid(1000)
+    args = (grid.directions, 1.5, 70.0, 0.1, 0.3)
+    f_all, a_all = eigen_transitions(*args, transitions="all")
+    _, a_sat = eigen_transitions(*args, transitions="satellites")
+    _, a_ct = eigen_transitions(*args, transitions="ct")
+    assert np.allclose(a_sat.sum(axis=1) + a_ct[:, 0], a_all.sum(axis=1))
+    nqr = nqr_frequency_spin_three_halves(70.0, 0.1)
+    near_line = np.abs(f_all - nqr) < 1.0
+    assert (a_sat * near_line).sum() == pytest.approx((a_all * near_line).sum())
+    assert (a_ct[:, 0] > 0).all()

@@ -40,10 +40,28 @@ tick the parameters you want fitted, and press **Fit**. Nothing is uploaded
 anywhere: the server is the standard library, bound to loopback, and the page
 makes no external requests.
 
+The frequency window is entered QUEST-style, as a centre frequency (MHz) and a
+spectral width (kHz). Ticking **NQR** zeroes the field and switches to all
+transitions — but the field and Larmor inputs stay live, so typing a small
+field on top gives Zeeman-perturbed NQR, computed by the same exact
+diagonalisation as everything else.
+
 Press **Synthesise** to make a noisy spectrum from the parameters on screen and
 fit that, which is the quickest way to see the whole thing work without touching
 your own data. You can also drop a two-column text file onto the page, or point
 it at Bruker directories — several at once to co-add them first.
+
+Loaded data can be phased (zero and first order, with an **Auto phase** for the
+zero-order term) and baseline-corrected with a polynomial fitted to the
+signal-free ends, all live while the sliders move; fits run on the corrected
+spectrum. Phasing uses Bruker's `1i` or a third text column when present, and
+otherwise rebuilds the imaginary part by Hilbert transform. **Export SVG** saves
+the figure, in the light theme and with its legend, for a paper or a slide.
+
+With the quadrupole coupling dominant, **central only** means the transition
+within the ±1/2 Kramers doublet — at a few hundred kHz in a weak field, and
+empty at zero field. The spin-3/2 NQR line itself is a ±1/2 ↔ ±3/2 transition:
+choose **satellites** or **all** for it.
 
 ## Fitting in one command
 

@@ -86,6 +86,31 @@ def test_simulate_honours_an_explicit_window():
         api_simulate(dict(MODEL, window={"low": 130.42, "high": 130.40}))
 
 
+def test_zeeman_perturbed_nqr_splits_the_line():
+    """A small Larmor term on top of the quadrupole interaction is a valid
+    experiment: the degenerate +-m levels split and the pattern widens."""
+    site = [{"cq": 72.0, "eta": 0.1, "lorentz": 0.001}]
+    pure = api_simulate({"experiment": {"spin": 1.5, "larmor": 0.0, "reference": 0,
+                                        "transitions": "all"}, "sites": site})
+    zeeman = api_simulate({"experiment": {"spin": 1.5, "larmor": 0.5, "reference": 0,
+                                          "transitions": "all"}, "sites": site})
+    assert max(pure["total"]["y"]) == pytest.approx(1.0, abs=1e-9)
+    assert max(zeeman["total"]["y"]) == pytest.approx(1.0, abs=1e-9)
+    assert zeeman["reference"] == 0.0
+    assert (zeeman["high"] - zeeman["low"]) > (pure["high"] - pure["low"])
+
+
+def test_pure_nqr_central_transition_has_no_intensity():
+    """At zero field the central transition carries nothing.  The GUI defaults
+    used to combine (NQR, transitions=ct) silently into this empty spectrum;
+    it now switches to "all" and explains a flat result."""
+    model = {"experiment": {"spin": 2.5, "larmor": 0.0, "transitions": "ct"},
+             "sites": [{"cq": 1.0, "eta": 0.0, "lorentz": 0.001}]}
+    assert max(api_simulate(model)["total"]["y"]) == 0.0
+    model["experiment"]["transitions"] = "all"
+    assert max(api_simulate(model)["total"]["y"]) == pytest.approx(1.0, abs=1e-9)
+
+
 def test_decimate_keeps_the_envelope():
     """Striding can step over a singularity; keeping block extremes cannot."""
     x = np.linspace(0.0, 1.0, 50_000)
@@ -265,3 +290,69 @@ def test_http_surface():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_page_has_quest_style_window_controls():
+    """The window is entered as centre frequency + spectral width, not From/To."""
+    html = (STATIC / "index.html").read_text()
+    assert 'id="win-centre"' in html and 'id="win-width"' in html
+    assert 'id="win-low"' not in html and 'id="win-high"' not in html
+
+
+def test_page_keeps_field_editable_in_nqr_mode():
+    """The NQR box is a preset, not a lock: it must not disable the field and
+    Larmor inputs (that is what forbade Zeeman-perturbed NQR)."""
+    html = (STATIC / "index.html").read_text()
+    assert '"larmor").disabled' not in html
+    assert '"field").disabled' not in html
+    assert "no observable intensity" in html
+
+
+def test_process_phases_and_does_not_accumulate():
+    """Corrections are always applied to the spectrum as loaded: sending the
+    same settings twice gives the same answer, and zero gets the original."""
+    from nqrlyze.webapp import api_autophase, api_process
+
+    original = api_demo(dict(MODEL, noise=0.0))
+    assert original["has_imag"] is False
+    first = api_process({"ph0": 40.0, "ph1": -30.0, "baseline_order": 1})
+    again = api_process({"ph0": 40.0, "ph1": -30.0, "baseline_order": 1})
+    assert first["data"]["y"] == again["data"]["y"]
+    assert first["data"]["y"] != original["data"]["y"]
+    assert first["processing"]["ph0"] == 40.0
+    back = api_process({})
+    assert np.allclose(back["data"]["y"], original["data"]["y"])
+
+    # The fitted copy follows the processing.
+    assert STATE.data is not None and STATE.raw is not None
+    assert not np.shares_memory(STATE.data.intensity, STATE.raw.intensity)
+
+    # Auto phase undoes a zero-order error on top of the Hilbert-rebuilt part.
+    api_process({"ph0": 70.0})
+    fixed = api_autophase({})
+    assert abs(fixed["processing"]["ph0"]) < 5.0
+
+
+def test_process_needs_data_and_sane_settings():
+    from nqrlyze.webapp import api_process
+
+    with pytest.raises(ValueError):
+        api_process({"ph0": 10.0})
+    api_demo(MODEL)
+    with pytest.raises(ValueError):
+        api_process({"baseline_order": 12})
+
+
+def test_new_data_resets_processing():
+    from nqrlyze.webapp import api_process
+
+    api_demo(MODEL)
+    api_process({"ph0": 30.0})
+    assert api_demo(MODEL)["processing"]["ph0"] == 0.0
+
+
+def test_page_has_processing_and_export_controls():
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    for control in ('id="ph0"', 'id="ph1"', 'id="bl-order"', 'id="autophase"',
+                    'id="export-svg"', "/api/process", "/api/autophase"):
+        assert control in html

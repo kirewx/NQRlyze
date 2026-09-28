@@ -15,6 +15,7 @@
   --s1:#0072B2; --s2:#D55E00; --s3:#009E73; --s4:#E69F00; --s5:#CC79A7; --s6:#56B4E9;
   --radius:10px; --shadow:0 1px 2px rgba(0,0,0,.05),0 4px 14px rgba(0,0,0,.05);
   --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
 }
 :root[data-theme="dark"]{
   --bg:#141413; --surface:#1c1c1a; --surface-2:#232321; --line:#33332f;
@@ -28,7 +29,7 @@
 html,body{height:100%}
 body{
   margin:0; background:var(--bg); color:var(--ink);
-  font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font:14px/1.5 var(--sans);
   -webkit-font-smoothing:antialiased;
 }
 /* ---- shell -------------------------------------------------------------- */
@@ -104,6 +105,7 @@ button.ghost:hover{color:var(--danger); background:transparent}
 .disclose .chev{transition:transform .15s}
 .disclose[aria-expanded="true"] .chev{transform:rotate(90deg)}
 .hint{color:var(--ink-3); font-size:11.5px; margin:6px 0 0; line-height:1.45}
+.card[aria-disabled="true"] :is(input,select,button){opacity:.5; pointer-events:none}
 /* ---- plot --------------------------------------------------------------- */
 .plotwrap{
   background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
@@ -118,6 +120,7 @@ button.ghost:hover{color:var(--danger); background:transparent}
 .legend .key{width:14px; height:2.5px; border-radius:2px; flex:none}
 .segmented{display:flex; border:1px solid var(--line-strong); border-radius:7px; overflow:hidden}
 .segmented button{border:0; border-radius:0; padding:4px 10px; font-size:12px; background:var(--surface)}
+.segmented button:disabled{opacity:.45; cursor:default}
 .segmented button[aria-pressed="true"]{background:var(--accent-soft); color:var(--accent); font-weight:600}
 .segmented button + button{border-left:1px solid var(--line)}
 #plot{flex:1; min-height:0; width:100%; display:block; touch-action:none}
@@ -206,10 +209,10 @@ table.results tr:last-child td{border-bottom:0}
       <section class="group">
         <h2>Window</h2>
         <div class="card">
-          <div class="row"><label for="win-low">From</label>
-            <div class="ctl"><input type="number" id="win-low" class="wide" step="0.001"><span class="unit">MHz</span></div></div>
-          <div class="row"><label for="win-high">To</label>
-            <div class="ctl"><input type="number" id="win-high" class="wide" step="0.001"><span class="unit">MHz</span></div></div>
+          <div class="row"><label for="win-centre">Centre</label>
+            <div class="ctl"><input type="number" id="win-centre" class="wide" step="0.001"><span class="unit">MHz</span></div></div>
+          <div class="row"><label for="win-width">Width</label>
+            <div class="ctl"><input type="number" id="win-width" class="wide" step="1" min="0"><span class="unit">kHz</span></div></div>
           <div class="row"><label for="win-points">Points</label>
             <div class="ctl"><input type="number" id="win-points" step="100" min="64" max="20000"><span class="unit"></span>
               <button id="win-auto">Auto</button></div></div>
@@ -237,12 +240,38 @@ table.results tr:last-child td{border-bottom:0}
           <p class="hint"><b>Synthesise</b> makes a noisy spectrum from the parameters above,
             so you can try a fit straight away. You can also drop a two-column text file anywhere on this page.</p>
         </div>
+        <div class="card" id="proc-card" aria-disabled="true">
+          <div class="row"><label for="ph0">Phase 0</label>
+            <div class="ctl"><input type="number" id="ph0" step="0.5" value="0">
+              <input type="range" id="ph0-range" min="-180" max="180" step="0.5" value="0" aria-label="Zero-order phase slider">
+              <span class="unit">&deg;</span></div></div>
+          <div class="row"><label for="ph1">Phase 1</label>
+            <div class="ctl"><input type="number" id="ph1" step="1" value="0">
+              <input type="range" id="ph1-range" min="-720" max="720" step="1" value="0" aria-label="First-order phase slider">
+              <span class="unit">&deg;</span></div></div>
+          <div class="row"><label for="pivot">Pivot</label>
+            <div class="ctl"><input type="number" id="pivot" class="wide" step="0.001" placeholder="centre"><span class="unit">MHz</span></div></div>
+          <div class="row"><label for="bl-order">Baseline</label>
+            <div class="ctl"><select id="bl-order">
+              <option value="-1">none</option><option value="0">offset</option><option value="1">linear</option>
+              <option value="2">quadratic</option><option value="3">cubic</option>
+              <option value="4">order 4</option><option value="5">order 5</option></select></div></div>
+          <div class="row"><label for="bl-edge">Signal-free</label>
+            <div class="ctl"><input type="number" id="bl-edge" min="1" max="50" step="1" value="10"><span class="unit">%</span>
+              <span class="hint" style="margin:0">at each end</span></div></div>
+          <div class="btnrow" style="margin-top:9px">
+            <button id="autophase">Auto phase</button>
+            <button id="reset-proc" class="ghost">Reset</button>
+          </div>
+          <p class="hint" id="proc-hint">Phase and baseline corrections apply live to the loaded spectrum,
+            and fits run on the corrected data. The baseline polynomial is fitted to the shaded ends.</p>
+        </div>
       </section>
 
       <section class="group">
         <h2>Fit</h2>
         <div class="card">
-          <div class="row"><label for="baseline">Baseline</label>
+          <div class="row"><label for="baseline">Fit baseline</label>
             <div class="ctl"><select id="baseline">
               <option value="-1">none</option><option value="0" selected>constant</option>
               <option value="1">linear</option><option value="2">quadratic</option></select></div></div>
@@ -275,6 +304,7 @@ table.results tr:last-child td{border-bottom:0}
             <button data-unit="ppm">ppm</button><button data-unit="kHz">kHz</button><button data-unit="MHz">MHz</button>
           </div>
           <button id="flip" title="Reverse the frequency axis">&#8646;</button>
+          <button id="export-svg" title="Save the figure as an SVG file (light theme, with legend)">Export SVG</button>
         </div>
         <div class="plotbody">
           <svg id="plot" role="img" aria-label="Simulated and measured powder spectrum"></svg>
@@ -322,6 +352,7 @@ const S = {
   sites:[newSite("Site 1")], free:new Set(["0.cq","0.eta"]),
   win:{low:null, high:null, points:2400, auto:true},
   unit:"ppm", reversed:true, sim:null, data:null, fit:null, job:null, busy:false,
+  proc:{ph0:0, ph1:0, pivot:null, baseline_order:-1, baseline_edge:10},
 };
 
 /* ---------- server ------------------------------------------------------- */
@@ -332,9 +363,11 @@ async function post(path, body){
   if(!r.ok) throw new Error(j.error || ("HTTP " + r.status));
   return j;
 }
-const experimentPayload = () => ({
-  spin:S.spin, larmor:S.nqr?0:S.larmor, transitions:S.transitions,
-});
+const experimentPayload = () => {
+  const exp = {spin:S.spin, larmor:S.larmor, transitions:S.transitions};
+  if(S.nqr) exp.reference = 0;          /* keep the axis absolute: ppm is meaningless near zero field */
+  return exp;
+};
 const sitePayload = s => ({
   label:s.label, cq:+s.cq, eta:+s.eta, iso:+s.iso, span:+s.span, skew:+s.skew,
   alpha:+s.alpha, beta:+s.beta, gamma:+s.gamma,
@@ -362,7 +395,12 @@ async function simulate(){
     if(token !== pending) return;
     S.sim = r; S.reference = r.reference;
     if(S.win.auto){ S.win.low = r.low; S.win.high = r.high; syncWindowInputs(); }
-    clearError(); draw();
+    if(r.total.y.some(v => v > 0)){ clearError(); }
+    else{
+      showError("no observable intensity in this window" + (S.larmor ? "" :
+        " - at zero field the central transition carries none; set transitions to \"all\""));
+    }
+    draw();
   }catch(e){ if(token === pending) showError(e.message); }
 }
 
@@ -514,21 +552,33 @@ function draw(){
   const X = u => m.l + (flip ? (xhi-u)/(xhi-xlo) : (u-xlo)/(xhi-xlo))*plotW;
   const Y = v => m.t + (1-(v-ylo)/(yhi-ylo))*plotH;
 
-  const g = mk("g",{});
+  const g = mk("g",{"font-family":css("--sans")});
   svg.append(g);
+
+  /* Where the baseline polynomial is fitted: the outer fraction of the data at
+     each end.  Shown on screen only, never exported. */
+  if(S.data && S.proc.baseline_order >= 0){
+    const xs = S.data.x, a = xs[0], b = xs[xs.length-1];
+    const f = S.proc.baseline_edge/100;
+    [[a, a+(b-a)*f], [b-(b-a)*f, b]].forEach(([p,q]) => {
+      const x1 = X(toUnit(p)), x2 = X(toUnit(q));
+      g.append(mk("rect",{class:"screen-only", x:Math.min(x1,x2), y:m.t, width:Math.abs(x2-x1),
+        height:plotH, fill:css("--accent-soft"), opacity:.7}));
+    });
+  }
 
   ticks(xlo,xhi,7).forEach(v => {
     const x = X(v); if(x < m.l-.5 || x > m.l+plotW+.5) return;
-    g.append(mk("line",{class:"gridline", x1:x, x2:x, y1:m.t, y2:m.t+plotH+(hasRes?gap+resH:0)}));
-    const tx = mk("text",{class:"", x:x, y:H-m.b+16, "text-anchor":"middle", fill:css("--ink-3"),
-                          "font-size":10.5, "font-family":"var(--mono)"});
+    g.append(mk("line",{stroke:css("--grid"), x1:x, x2:x, y1:m.t, y2:m.t+plotH+(hasRes?gap+resH:0)}));
+    const tx = mk("text",{x:x, y:H-m.b+16, "text-anchor":"middle", fill:css("--ink-3"),
+                          "font-size":10.5, "font-family":css("--mono")});
     tx.textContent = fmtTick(v); g.append(tx);
   });
   ticks(ylo,yhi,5).forEach(v => {
     const y = Y(v); if(y < m.t-.5 || y > m.t+plotH+.5) return;
-    g.append(mk("line",{class:"gridline", x1:m.l, x2:m.l+plotW, y1:y, y2:y}));
+    g.append(mk("line",{stroke:css("--grid"), x1:m.l, x2:m.l+plotW, y1:y, y2:y}));
     const tx = mk("text",{x:m.l-8, y:y+3.5, "text-anchor":"end", fill:css("--ink-3"),
-                          "font-size":10.5, "font-family":"var(--mono)"});
+                          "font-size":10.5, "font-family":css("--mono")});
     tx.textContent = fmtTick(v); g.append(tx);
   });
   g.append(mk("line",{x1:m.l, x2:m.l+plotW, y1:m.t+plotH, y2:m.t+plotH, stroke:css("--line-strong")}));
@@ -564,7 +614,7 @@ function draw(){
     rt.textContent = "residual"; g.append(rt);
   }
 
-  const cross = mk("line",{x1:0,x2:0,y1:m.t,y2:m.t+plotH, stroke:css("--ink-3"),
+  const cross = mk("line",{class:"screen-only", x1:0,x2:0,y1:m.t,y2:m.t+plotH, stroke:css("--ink-3"),
                            "stroke-width":1, "stroke-dasharray":"3 3", opacity:0});
   g.append(cross);
   const readout = document.getElementById("readout");
@@ -596,6 +646,80 @@ function draw(){
     const key = el("span","key"); key.style.background = tr.c;
     item.append(key, el("span",null,tr.name)); legend.append(item);
   }
+}
+
+/* ---------- processing --------------------------------------------------- */
+const PROC_DEFAULTS = {ph0:0, ph1:0, pivot:null, baseline_order:-1, baseline_edge:10};
+let procTimer = null, procPending = 0;
+
+const procPayload = () => ({ph0:S.proc.ph0, ph1:S.proc.ph1, pivot:S.proc.pivot,
+  baseline_order:S.proc.baseline_order, baseline_edge:S.proc.baseline_edge/100});
+
+function syncProcInputs(){
+  document.getElementById("ph0").value = S.proc.ph0;
+  document.getElementById("ph0-range").value = S.proc.ph0;
+  document.getElementById("ph1").value = S.proc.ph1;
+  document.getElementById("ph1-range").value = S.proc.ph1;
+  document.getElementById("pivot").value = S.proc.pivot == null ? "" : S.proc.pivot;
+  document.getElementById("bl-order").value = S.proc.baseline_order;
+  document.getElementById("bl-edge").value = S.proc.baseline_edge;
+}
+function enableProcessing(on, hasImag){
+  document.getElementById("proc-card").setAttribute("aria-disabled", String(!on));
+  document.getElementById("proc-hint").innerHTML = !on
+    ? "Load or synthesise a spectrum to phase and baseline-correct it."
+    : (hasImag ? "Phasing uses the imaginary part stored with the data."
+               : "No imaginary part was loaded, so phasing uses one rebuilt by Hilbert transform.")
+      + " Fits run on the corrected data; the baseline polynomial is fitted to the shaded ends.";
+}
+/* The server re-derives the spectrum from the data as loaded every time, so
+   only the newest request matters and corrections never pile up. */
+async function reprocess(path){
+  const token = ++procPending;
+  try{
+    const r = await post(path || "/api/process", procPayload());
+    if(token !== procPending) return;
+    S.proc.ph0 = +(+r.processing.ph0).toFixed(2); syncProcInputs();
+    S.data = r.data; invalidateFit(); draw();
+  }catch(e){ if(token === procPending) showError(e.message); }
+}
+function scheduleProcess(){ clearTimeout(procTimer); procTimer = setTimeout(reprocess, 60); }
+
+/* ---------- export ------------------------------------------------------- */
+/* Redraws in the light theme (the one a paper or slide wants), copies the
+   figure with its legend drawn in, then puts the screen back as it was. */
+function exportSVG(){
+  if(!S.sim && !S.data){ showError("Nothing to export yet."); return; }
+  const svg = document.getElementById("plot");
+  const theme = document.documentElement.getAttribute("data-theme");
+  document.documentElement.setAttribute("data-theme", "light");
+  draw();
+  const copy = svg.cloneNode(true);
+  const legendItems = [...document.querySelectorAll("#legend .item")].map(item => ({
+    color:item.querySelector(".key").style.background, name:item.textContent}));
+  const bg = css("--surface"), ink = css("--ink-2");
+  document.documentElement.setAttribute("data-theme", theme);
+  draw();
+
+  copy.querySelectorAll(".screen-only").forEach(n => n.remove());
+  copy.removeAttribute("id"); copy.removeAttribute("role");
+  copy.setAttribute("xmlns", SVG);
+  const W = +copy.getAttribute("width");
+  copy.insertBefore(mk("rect",{x:0, y:0, width:"100%", height:"100%", fill:bg}), copy.firstChild);
+  const legend = mk("g",{"font-family":css("--sans"), "font-size":11.5, fill:ink});
+  legendItems.forEach((item, i) => {
+    const y = 26 + i*17;
+    legend.append(mk("line",{x1:W-160, x2:W-142, y1:y-4, y2:y-4, stroke:item.color, "stroke-width":2.5}));
+    const t = mk("text",{x:W-136, y}); t.textContent = item.name; legend.append(t);
+  });
+  copy.append(legend);
+
+  const text = '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(copy);
+  const url = URL.createObjectURL(new Blob([text], {type:"image/svg+xml"}));
+  const a = el("a"); a.href = url;
+  a.download = ((S.data && S.dataLabel) || "nqrlyze-simulation").replace(/[^\w.-]+/g, "_") + ".svg";
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /* ---------- status ------------------------------------------------------- */
@@ -644,13 +768,16 @@ function renderFit(r){
 
 /* ---------- actions ------------------------------------------------------ */
 function syncWindowInputs(){
-  document.getElementById("win-low").value  = S.win.low  == null ? "" : (+S.win.low).toFixed(5);
-  document.getElementById("win-high").value = S.win.high == null ? "" : (+S.win.high).toFixed(5);
+  const has = S.win.low != null && S.win.high != null;
+  document.getElementById("win-centre").value = has ? ((S.win.low + S.win.high) / 2).toFixed(5) : "";
+  document.getElementById("win-width").value  = has ? ((S.win.high - S.win.low) * 1e3).toFixed(1) : "";
   document.getElementById("win-points").value = S.win.points;
 }
 function setData(r){
   S.data = r.data; S.dataLabel = r.label; S.reference = r.reference || S.reference;
   S.fit = null;
+  S.proc = Object.assign({}, PROC_DEFAULTS); procPending++; syncProcInputs();
+  enableProcessing(true, r.has_imag);
   S.win.auto = false; S.win.low = r.low; S.win.high = r.high; syncWindowInputs();
   statusHTML(`<span class="muted">Loaded <b>${r.label}</b> &mdash; ${r.points} points,
     ${(+r.low).toFixed(5)} to ${(+r.high).toFixed(5)} MHz. Tick parameters and press Fit.</span>`);
@@ -703,6 +830,7 @@ function applyTheme(mode){
   draw();
 }
 function setUnit(u){
+  if(u === "ppm" && S.nqr) return;      /* ppm needs a non-zero reference */
   S.unit = u;
   document.querySelectorAll("[data-unit]").forEach(b =>
     b.setAttribute("aria-pressed", String(b.dataset.unit === u)));
@@ -750,9 +878,26 @@ async function init(){
   };
   document.getElementById("nqr").onchange = e => {
     S.nqr = e.target.checked;
-    document.getElementById("larmor").disabled = S.nqr;
-    document.getElementById("field").disabled = S.nqr;
-    if(S.nqr) setUnit("MHz");
+    const ppm = document.querySelector('[data-unit="ppm"]');
+    if(S.nqr){
+      /* Preset, not a lock: zero the field but leave both inputs live, so a
+         small field typed afterwards gives Zeeman-perturbed NQR.  Switch to
+         "all" because the central transition carries nothing at zero field. */
+      S.prevField = S.field;
+      S.field = 0; S.larmor = 0;
+      document.getElementById("field").value = 0;
+      document.getElementById("larmor").value = (0).toFixed(4);
+      S.transitions = "all";
+      document.getElementById("transitions").value = "all";
+      ppm.disabled = true;
+      setUnit("MHz");
+    }else{
+      S.field = S.prevField != null ? S.prevField : 11.7449;
+      S.larmor = (S.gamma||0) * S.field;
+      document.getElementById("field").value = S.field;
+      document.getElementById("larmor").value = S.larmor.toFixed(4);
+      ppm.disabled = false;
+    }
     invalidateFit(); S.win.auto = true; simulate();
   };
   document.getElementById("transitions").value = S.transitions;
@@ -761,10 +906,19 @@ async function init(){
   document.getElementById("add-site").onclick = () => {
     S.sites.push(newSite(`Site ${S.sites.length+1}`)); invalidateFit(); renderSites(); simulate();
   };
-  ["win-low","win-high"].forEach(id => document.getElementById(id).oninput = e => {
+  const applyCentreWidth = () => {
+    const centre = +document.getElementById("win-centre").value;
+    const width  = +document.getElementById("win-width").value * 1e-3;   /* kHz -> MHz */
+    if(!isFinite(centre) || !isFinite(width) || width <= 0){
+      clearTimeout(timer);
+      showError("spectral width must be a positive number of kHz"); return;
+    }
     S.win.auto = false;
-    S.win[id === "win-low" ? "low" : "high"] = +e.target.value; scheduleSim();
-  });
+    S.win.low = centre - width / 2; S.win.high = centre + width / 2;
+    scheduleSim();
+  };
+  ["win-centre","win-width"].forEach(id => document.getElementById(id).oninput = applyCentreWidth);
+  ["win-centre","win-width"].forEach(id => document.getElementById(id).onblur = syncWindowInputs);
   document.getElementById("win-points").oninput = e => { S.win.points = +e.target.value||2400; scheduleSim(); };
   document.getElementById("win-auto").onclick = () => { invalidateFit(); S.win.auto = true; simulate(); };
 
@@ -784,6 +938,7 @@ async function init(){
   };
   document.getElementById("clear-data").onclick = async () => {
     await post("/api/clear", {}); S.data = null; S.fit = null;
+    procPending++; S.proc = Object.assign({}, PROC_DEFAULTS); syncProcInputs(); enableProcessing(false);
     statusHTML('<span class="muted">Data cleared.</span>'); invalidateFit(); S.win.auto = true; simulate();
   };
   document.getElementById("run-fit").onclick = runFit;
@@ -802,6 +957,40 @@ async function init(){
         unit:"MHz", reference:S.nqr?0:S.larmor}));
     }catch(err){ showError(err.message); }
   });
+
+  const phaseControl = (key) => {
+    const num = document.getElementById(key), range = document.getElementById(key + "-range");
+    const apply = (v, from) => {
+      v = +v; if(!isFinite(v)) return;
+      S.proc[key] = v;
+      if(from !== "num") num.value = v;
+      if(from !== "range"){
+        if(Math.abs(v) > +range.max){ range.max = Math.abs(v); range.min = -Math.abs(v); }
+        range.value = v;
+      }
+      scheduleProcess();
+    };
+    num.addEventListener("input", () => apply(num.value, "num"));
+    range.addEventListener("input", () => apply(range.value, "range"));
+  };
+  phaseControl("ph0"); phaseControl("ph1");
+  document.getElementById("pivot").oninput = e => {
+    const v = e.target.value.trim();
+    if(v === ""){ S.proc.pivot = null; scheduleProcess(); }
+    else if(isFinite(+v)){ S.proc.pivot = +v; scheduleProcess(); }
+  };
+  document.getElementById("bl-order").onchange = e => { S.proc.baseline_order = +e.target.value; scheduleProcess(); };
+  document.getElementById("bl-edge").oninput = e => {
+    const v = +e.target.value;
+    if(v >= 1 && v <= 50){ S.proc.baseline_edge = v; scheduleProcess(); }
+  };
+  document.getElementById("bl-edge").onblur = syncProcInputs;
+  document.getElementById("autophase").onclick = () => { clearTimeout(procTimer); reprocess("/api/autophase"); };
+  document.getElementById("reset-proc").onclick = () => {
+    S.proc = Object.assign({}, PROC_DEFAULTS); syncProcInputs(); clearTimeout(procTimer); reprocess();
+  };
+  document.getElementById("export-svg").onclick = exportSVG;
+  enableProcessing(false);
 
   new ResizeObserver(() => draw()).observe(document.getElementById("plot").parentElement);
   renderSites(); setUnit("ppm"); syncWindowInputs();

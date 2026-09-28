@@ -158,6 +158,62 @@ def transition_indices(spin: float, which: str | list[tuple[int, int]]):
     raise ValueError(f"unknown transition selection {which!r}")
 
 
+def _quadrupole_dominates(spin: float, cq: float, larmor: float) -> bool:
+    """Whether the quadrupole splitting ``nu_Q`` exceeds the Larmor frequency.
+
+    In that regime the levels group into zero-field Kramers doublets, so their
+    energy order no longer follows ``m`` along the field and a selection by
+    level index picks the wrong pairs.
+    """
+    nu_q = 3.0 * abs(cq) / (2.0 * spin * (2.0 * spin - 1.0))
+    return abs(larmor) < nu_q
+
+
+def _half_projector_zeeman(n_dot_i: np.ndarray, spin: float) -> np.ndarray:
+    """Projector onto ``m = +-1/2`` along each field direction, ``(c, d, d)``.
+
+    Built as a polynomial in ``(n.I)^2`` -- the product over the other ``|m|``
+    of ``((n.I)^2 - m^2) / (1/4 - m^2)`` -- so no second diagonalisation.
+    """
+    dim = n_dot_i.shape[-1]
+    square = n_dot_i @ n_dot_i
+    eye = np.eye(dim)
+    proj = np.broadcast_to(eye, square.shape).astype(complex)
+    for m in np.arange(1.5, spin + 0.25, 1.0):
+        proj = proj @ ((square - m * m * eye) / (0.25 - m * m))
+    return proj
+
+
+def _half_projector_quadrupole(spin: float, cq: float, eta: float) -> np.ndarray:
+    """Projector onto the zero-field Kramers doublet of ``|m| = 1/2`` character.
+
+    With ``eta > 0`` the doublets are no longer pure ``|m|`` states, but the one
+    with the smallest ``<I_z^2>`` is the one that becomes ``+-1/2`` as
+    ``eta -> 0``, whatever the sign of ``Cq``.
+    """
+    hq = quadrupolar_hamiltonian(spin, cq, eta)
+    _, vecs = np.linalg.eigh(hq)
+    iz = spin_operators(spin)[2]
+    iz2 = np.real(np.einsum("ip,ij,jp->p", vecs.conj(), iz @ iz, vecs))
+    half = vecs[:, np.argsort(iz2)[:2]]
+    return half @ half.conj().T
+
+
+def _central_pair(
+    vectors: np.ndarray, projector: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Per orientation, the two levels with the most ``+-1/2`` character.
+
+    Returns level indices ``(lower, upper)`` in energy order, each ``(c,)``.
+    """
+    if projector.ndim == 2:
+        weight = np.einsum("cip,ij,cjp->cp", vectors.conj(), projector, vectors)
+    else:
+        weight = np.einsum("cip,cij,cjp->cp", vectors.conj(), projector, vectors)
+    best = np.argsort(np.real(weight), axis=1)[:, -2:]
+    return best.min(axis=1), best.max(axis=1)
+
+
 def eigen_transitions(
     directions: np.ndarray,
     spin: float,
@@ -218,9 +274,32 @@ def eigen_transitions(
     ix, iy, iz = spin_operators(spin)
     ops = np.stack([ix, iy, iz])  # (3, d, d)
     hq = quadrupolar_hamiltonian(spin, cq, eta)
-    pairs = transition_indices(spin, transitions)
+
+    # Named selections that depend on the central transition are resolved per
+    # orientation by eigenstate character, not by level index: once the
+    # quadrupole coupling dominates, the two middle levels in energy belong to
+    # different Kramers doublets, and "ct" by index becomes one Zeeman branch
+    # of an NQR line.  Explicit pairs are taken literally.
+    which = transitions.lower() if isinstance(transitions, str) else None
+    quad = _quadrupole_dominates(spin, cq, larmor)
+    by_character = which == "ct" or (which in ("satellites", "single") and quad)
+    if by_character and abs(spin - round(spin)) < 1e-9:
+        if which == "ct":
+            raise ValueError("central transition requires half-integer spin")
+        by_character = False
+    if by_character and which == "ct":
+        pairs = [(0, 1)]  # placeholder; replaced per orientation below
+    elif by_character:
+        # Near zero field every level couples to every other; the rf matrix
+        # elements do the selecting.  "satellites" then drops the CT pair.
+        pairs = transition_indices(spin, "all")
+    else:
+        pairs = transition_indices(spin, transitions)
     ia = np.array([p[0] for p in pairs])
     ib = np.array([p[1] for p in pairs])
+    fixed_half = (
+        _half_projector_quadrupole(spin, cq, eta) if by_character and quad else None
+    )
 
     if rf_average == "auto":
         rf_average = "isotropic" if larmor == 0.0 else "perpendicular"
@@ -251,7 +330,16 @@ def eigen_transitions(
         # Transform the spin operators into the eigenbasis.  ``vectors[c, :, p]``
         # is eigenvector p, so u[k, c, p, q] = <p| I_k |q>.
         u = np.einsum("cip,kij,cjq->kcpq", vectors.conj(), ops, vectors)
-        sel = u[:, :, ia, ib]  # (3, c, T)
+        rows = np.arange(n.shape[0])
+        if by_character:
+            half = fixed_half if quad else _half_projector_zeeman(n_dot_i, spin)
+            ct_a, ct_b = _central_pair(vectors, half)
+        if by_character and which == "ct":
+            lo, hi = ct_a[:, None], ct_b[:, None]  # (c, 1)
+        else:
+            lo = np.broadcast_to(ia, (n.shape[0], ia.size))
+            hi = np.broadcast_to(ib, (n.shape[0], ib.size))
+        sel = u[:, rows[:, None], lo, hi]  # (3, c, T)
         mod2 = np.abs(sel) ** 2
         total = mod2.sum(axis=0)  # |u|^2
         if rf_average == "isotropic":
@@ -260,7 +348,13 @@ def eigen_transitions(
             along = np.abs(np.einsum("ck,kcT->cT", n, sel)) ** 2
             inten = 0.5 * (total - along)
 
-        transition_freqs = energies[:, ib] - energies[:, ia]
+        transition_freqs = (
+            np.take_along_axis(energies, hi, axis=1)
+            - np.take_along_axis(energies, lo, axis=1)
+        )
+        if by_character and which == "satellites":
+            is_ct = (lo == ct_a[:, None]) & (hi == ct_b[:, None])
+            inten = np.where(is_ct, 0.0, inten)
         if drop_degenerate:
             inten = np.where(np.abs(transition_freqs) <= degeneracy_tol, 0.0, inten)
         freqs[start : start + chunk] = transition_freqs
